@@ -353,7 +353,7 @@ else
     gD = {};
 end
 
-gcnap = CNAgenerateMFNetwork(gcnap,1);
+gcnap = CNAgenerateMFNetwork(gcnap);
 %% 4. in case of gui, generate map
 if cnap.has_gui
     gcnap.local.errval  = 0;

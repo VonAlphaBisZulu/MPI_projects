@@ -965,7 +965,7 @@ cnap1.reacMin=-ones(size(st,2),1);
 cnap1.reacMin(find(irr))=0;
 cnap1.epsilon=epsilon;
 cnap1.reacID=reacID;
-cnap1=CNAgenerateMFNetwork(cnap1,1);
+cnap1=CNAgenerateMFNetwork(cnap1);
 [sys.rd, sys.irrev_rd, sys.sub,sys.red_met_int, xxx]= CNAcompressMFNetwork(cnap1,sys.single_reac,[],1,0,1,find(sys.blocked_fva),0);
 sys.sub=sys.sub';  %Transposed version required here (compatible with metatool)
 

@@ -429,7 +429,7 @@ end
 
 % create gcnap Network
 gcnap.epsilon = cnap.epsilon;
-gcnap = CNAgenerateMFNetwork(gcnap,1);
+gcnap = CNAgenerateMFNetwork(gcnap);
 end
 
 %% supplementary

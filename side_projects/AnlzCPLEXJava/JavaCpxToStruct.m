@@ -6,7 +6,7 @@ switch varType
         % Iterator is needed to extract information from model
         iter = jcpx.iterator;
         iR = 1;
-        iIT = 1;
+        iT = 1;
         while iter.hasNext
             obj = iter.next;
             switch class(obj)
@@ -58,7 +58,7 @@ switch varType
                     con(iR,:) = [{var},coeff];
                     iR = iR+1;
                 case 'ilog.cplex.CpxIfThen' % Logical and indicator constraints
-                    if iIT == 1
+                    if iT == 1
                         % If-Then conditions / indicator constraints
                         scpx.lgcName = cell.empty(numr,0);
                         scpx.lgcType = cell.empty(numr,0);
@@ -69,7 +69,7 @@ switch varType
                     scpx.lgcType(iT) = {char(obj.getType)};
                     scpx.lgcLB(iT)   = obj.getLB;
                     scpx.lgcUB(iT)   = obj.getUB;
-                    iIT = iIT+1;
+                    iT = iT+1;
                 otherwise
                     error(['untreated class: ''' class(obj) '''']);
             end

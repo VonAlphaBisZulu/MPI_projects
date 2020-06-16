@@ -494,7 +494,7 @@ else % use non-integrated MILP
 	newcnap.reacMin=reg.reacMin_rd;	
 	newcnap.reacMax=reg.reacMax_rd;	
 	%newcnap.reacID=char(reg.sub_name);
-	newcnap=CNAgenerateMFNetwork(newcnap,1);
+	newcnap=CNAgenerateMFNetwork(newcnap);
 	zw=reg.react_name;
 	for j=1:size(zw)
 		if(isempty(zw{j}))
@@ -926,7 +926,7 @@ cnap1.reacMin=-ones(size(st,2),1);
 cnap1.reacMin(find(irr))=0;
 cnap1.epsilon=epsilon;
 cnap1.reacID=reacID;
-cnap1=CNAgenerateMFNetwork(cnap1,1);
+cnap1=CNAgenerateMFNetwork(cnap1);
 [sys.rd, sys.irrev_rd, sys.sub,sys.red_met_int]= CNAcompressMFNetwork(cnap1,union(sys.single_reac,noCompressReacs),[],1,0,1,find(sys.blocked_fva),0);
 sys.sub=sys.sub';  %Transposed version required here (compatible with metatool)
 

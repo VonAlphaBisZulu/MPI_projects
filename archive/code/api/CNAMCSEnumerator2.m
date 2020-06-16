@@ -252,7 +252,7 @@ if(preprocess)
   	%cnap1.reacMin(find(stirr))=0;
   	%cnap1.reacID=cnap.reacID;
   	%cnap1.epsilon=cnap.epsilon;
-  	%cnap1=CNAgenerateMFNetwork(cnap1,1);
+  	%cnap1=CNAgenerateMFNetwork(cnap1);
 	%[rd, irrev_rd, sub]= CNAcompressMFNetwork(cnap1,notknockable2,[],1,0,1,blocked_fva,0);
 	[rd, irrev_rd, sub]= CNAcompressMFNetwork(cnap,notknockable2,[],1,0,1,find(blocked_fva),0);
 
