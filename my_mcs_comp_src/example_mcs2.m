@@ -1,28 +1,39 @@
-% This script reproduces the results from Table 2, scenario 4. 
+% This script shows how MCSEnumerator2 and geneMCSEnumerator2 can be used
+% to compute gene-based intervention strategies/strain designs.
 %
+% Example:
 % MCS computation for the strain design of a 2,3-butanediol production host
-% using co-feeding and supporting high ATP maintenance rates
+% using co-feeding and supporting high ATP maintenance rates.
 %
-% We enumerate all Minimal Gene Cut Sets up to the size of 6 for the
+% We iteratively search for Minimal Gene Cut Sets for the
 % strongly growth coupled production of 2,3-butanediol from glucose and/or
-% acetate and/or glycerol with E. coli. Compared to the third scenario, a 
-% second desired region is introduced to make sure all found strain designs 
-% support higher ATP demands (18 mM/gBDW/h). GPR rule compression and network 
-% compression are enabled to speed up the MCS computation.
+% acetate and/or glycerol with E. coli. 
+% We introduce 2 different pathways, the MCS algorithm might pick one pathway
+% or the other, depending on which pathway suits the overall strategy,
+% (the substrate combinations and the (genetic) knockouts) better.
+% A second target region is necessary, because of the special role of acetate 
+% that might in some cases be a by-product and in other cases a co-substrate.
+% This makes a case-differentiation necessary.
+% A second desired region is introduced to make sure all found strain designs 
+% support higher ATP demands (18 mM/gBDW/h).
 %
 % % required files/models:
 %   iMLcore.mat
 %
 % % important variables:
-%   max_num_interv - defines the maximum number of possible gene cuts and
-%                    substrate additions
+%   maxCost - defines the maximum sum of costs of possible gene cuts and
+%             substrate additions
+%   maxSolutions - says after how many solutions in the compressed system the
+%                  search is stopped.
 %
 % % process:
 %   0) Start parallel pool to speed up FVAs
 %   1) Setup model, add heterologous  reactions
 %   2) Define Target and Desired regions for MCS computation
-%   3) Run MCS computation
+%   3) Run gene MCS computation
 %   4) Output
+%   5) Run regular MCS computation
+%   6) Output
 %
 % Correspondence: schneiderp@mpi-magdeburg.mpg.de
 % -Jun 2020
@@ -32,8 +43,9 @@
 if ~exist('cnan','var')
     startcna(1)
 end
-max_solutions   = 10;
-max_num_interv  = 20;
+maxSolutions = 10;
+maxCost      = 20; % This number is arbitrary. The higher the nuber, the faster solutions will be found
+                   % but also the larger the intervention strategies might become.
 
 options.milp_solver     = 'matlab_cplex'; % alternative: 'java_cplex'; 
 options.preproc_D_violations = 0;
@@ -55,10 +67,10 @@ load('iMLcore.mat')
 cnap = CNAaddSpeciesMFN(cnap,'actn_c',0,'Acetoin');
 cnap = CNAaddSpeciesMFN(cnap,'diact_c',0,'Diacetyl');
 cnap = CNAaddSpeciesMFN(cnap,'23bdo_c',0,'3-Hydroxybutan-2-one'); % 2,3 butanediol
-% 1st pathway
+% 1st pathway: Direct pathway from acetolactate to acetone
 cnap = CNAaddReactionMFN(cnap,'ACLDC','1 alac__S_c + 1 h_c = 1 co2_c + 1 actn_c' ,0,1000,0,nan,0,...
 '//START_GENERIC_DATA{;:;deltaGR_0;#;num;#;NaN;:;uncertGR_0;#;num;#;NaN;:;geneProductAssociation;#;str;#;alsD;:;}//END_GENERIC_DATA',0,0,0,0);
-% 2nd pathway
+% 2nd pathway: Via diacetyl, requiring oxygen and consuming one more NADH
 cnap = CNAaddReactionMFN(cnap,'ALOX','1 alac__S_c + 1 h_c + 0.5 o2_c = 1 co2_c + 1 h2o_c + 1 diact_c' ,0,1000,0,nan,0,...
 '//START_GENERIC_DATA{;:;deltaGR_0;#;num;#;NaN;:;uncertGR_0;#;num;#;NaN;:;geneProductAssociation;#;str;#;butA;:;}//END_GENERIC_DATA',0,0,0,0);
 cnap = CNAaddReactionMFN(cnap,'ACTD','1 h_c + 1 nadh_c + 1 diact_c = 1 nad_c + 1 actn_c' ,-1000,1000,0,nan,0,...
@@ -143,7 +155,7 @@ gkiCost(ismember(genes,{'alsD','butA','budC'})) = 1; % (addition cost per gene: 
                                                     {T1 T2}, {t1 t2}, ...
                                                     {D1 D2}, {d1 d2}, ...
                                                     rkoCost,rkiCost, ...  reaction KO cost, reaction addition cost
-                                                    max_solutions,max_num_interv, ...
+                                                    maxSolutions,maxCost, ...
                                                     gkoCost,gkiCost, ...  gene KO cost, gene addition cost
                                                     [],options,... gpr_rules, options
                                                     1); % verbose
@@ -155,17 +167,56 @@ gkiCost(ismember(genes,{'alsD','butA','budC'})) = 1; % (addition cost per gene: 
 
 %% 4) Output
 % Of the results, 5 gene MCS are selected and returned as text
-gmcs_selection = gmcs(:,round(linspace(1,size(gmcs,2),5)));
-ko_text = cell(1,size(gmcs_selection,2));
+gselection = round(linspace(1,size(gmcs,2),5));
+gmcs_selection = gmcs(:,gselection);
+gko_text = cell(1,size(gmcs_selection,2));
 for i = 1:size(gmcs_selection,2)
     kis = find(~isnan(gmcs_selection(:,i)) & gmcs_selection(:,i) > 0);
     kos = find(~isnan(gmcs_selection(:,i)) & gmcs_selection(:,i) < 0);
     for j = 1:length(kis)
-        ko_text{j,i} = ['+ ' strtrim(gcnap.reacID(kis(j),:))];
+        gko_text{j,i} = ['+ ' strtrim(gcnap.reacID(kis(j),:))];
+    end
+    gko_text{length(kis)+1,i} = '';
+    for j = length(kis)+2:length(kis)+length(kos)
+        gko_text{j,i} = ['- ' strtrim(gcnap.reacID(kos(j-length(kis)-1),:))];
+    end
+end
+disp('some gene MCS:');
+disp(gko_text);
+
+%% 5) MCS Computation
+% setup some MCS parameters that are different between MCS and gene MCS computation
+koCost = nan(cnap.numr,1);
+koCost(strcmp(cellstr(cnap.reacID),'EX_o2_e')) = 0.5; % (knockout cost 0.5)
+koCost(unique([gpr_rules.reaction])) = 1; % all reactions with gene-associations have knockout-costs 1
+
+kiCost = nan(cnap.numr,1);
+kiCost([rGlc_up rGlyc_up]) = 1; % adding glucose or glycerol would cost 1
+kiCost(rAc_up) = 0.5;           % adding acetate is cheaper (0.5)
+kiCost(ismember(cellstr(cnap.reacID),{'ACLDC','ACTD','BTDD'})) = 1; % (addition cost per gene: 1)
+
+mcs = CNAMCSEnumerator2(cnap, ...
+                            {T1 T2}, {t1 t2}, ...
+                            {D1 D2}, {d1 d2}, ...
+                            koCost,kiCost, ...
+                            maxSolutions,maxCost, ...
+                            options,...
+                            1); % verbose
+%% 6) Output
+% Of the results, 5 gene MCS are selected and returned as text
+selection = round(linspace(1,size(mcs,2),5));
+mcs_selection = mcs(:,selection);
+ko_text = cell(1,size(mcs_selection,2));
+for i = 1:size(mcs_selection,2)
+    kis = find(~isnan(mcs_selection(:,i)) & mcs_selection(:,i) > 0);
+    kos = find(~isnan(mcs_selection(:,i)) & mcs_selection(:,i) < 0);
+    for j = 1:length(kis)
+        ko_text{j,i} = ['+ ' strtrim(cnap.reacID(kis(j),:))];
     end
     ko_text{length(kis)+1,i} = '';
     for j = length(kis)+2:length(kis)+length(kos)
-        ko_text{j,i} = ['- ' strtrim(gcnap.reacID(kos(j-length(kis)-1),:))];
+        ko_text{j,i} = ['- ' strtrim(cnap.reacID(kos(j-length(kis)-1),:))];
     end
 end
+disp('some reaction MCS:');
 disp(ko_text);
