@@ -19,6 +19,7 @@ linprog_options = optimoptions('linprog','Display','off');
 intlinprog_options = optimoptions('intlinprog','Display','off');
 
 % opt_p0 is the optimal value in the primal problem
+%% A*x <= b , lb<=x<=ub, c'x
 [~,opt_ref,~] = linprog(c,[],[],A,b,lb,ub,[],linprog_options);
 
 

@@ -263,7 +263,6 @@ function cnap = CNAaddReactionMFNext( cnap, reac, equation, lb, ub, objCoeff, de
         if cnap.has_gui
             cnap.reacBoxes(rindex,:)=[rindex xpos ypos 0 flxMapNo editable];
             if flxMapNo <= size(cnap.figs,1) && flxMapNo >= 1
-
                 zw=cnap.reacBoxes(rindex,6);
                 zw1=uicontrol('Style', 'edit','Parent',cnap.figs(flxMapNo,1),'String', '###','Units','normalized','HorizontalAlignment','left','BackgroundColor',cnap.color1,'ForegroundColor',cnap.textColor,'TooltipString',reac);
                 set(zw1, 'ButtonDownFcn', {@execute_callback, cnap.net_var_name,...
@@ -282,7 +281,7 @@ function cnap = CNAaddReactionMFNext( cnap, reac, equation, lb, ub, objCoeff, de
                 elseif(zw==3)   % non-visible
                     set(zw1,'Visible','off');
                 end
-            else
+            elseif flxMapNo < 0
                 % generate map if necessary (only when single parameters were
                 % passed, so that the number of re-generation stays considerable)
                 if nargin > 2
