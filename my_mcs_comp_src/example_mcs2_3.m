@@ -153,7 +153,7 @@ gkiCost(ismember(genes,{'alsD','butA','budC'})) = 1; % (addition cost per gene: 
 
 
 %% 3) MCS Computation
-[rmcs, gmcs, gcnap, cmp_gmcs, cmp_gcnap, mcs_idx] = CNAgeneMCSEnumerator2(cnap, ...
+[rmcs, gmcs, gcnap, ~, ~, gmcs_idx] = CNAgeneMCSEnumerator2(cnap, ...
                                                     {T1 T2}, {t1 t2}, ...
                                                     {D1 D2}, {d1 d2}, ...
                                                     rkoCost,rkiCost, ...  reaction KO cost, reaction addition cost
@@ -169,7 +169,7 @@ gkiCost(ismember(genes,{'alsD','butA','budC'})) = 1; % (addition cost per gene: 
 
 %% 4) Output
 % Of the results, 5 gene MCS are selected and returned as text
-gselection = round(linspace(1,size(gmcs,2),5));
+[~,gselection] = unique(gmcs_idx);
 gmcs_selection = gmcs(:,gselection);
 gko_text = cell(1,size(gmcs_selection,2));
 for i = 1:size(gmcs_selection,2)
@@ -197,7 +197,7 @@ kiCost([rGlc_up rGlyc_up]) = 1; % adding glucose or glycerol would cost 1
 kiCost(rAc_up) = 0.5;           % adding acetate is cheaper (0.5)
 kiCost(ismember(cellstr(cnap.reacID),{'ACLDC','ACTD','BTDD'})) = 1; % (addition cost per gene: 1)
 
-mcs = CNAMCSEnumerator2(cnap, ...
+[mcs, ~, ~, ~, mcs_idx] = CNAMCSEnumerator2(cnap, ...
                             {T1 T2}, {t1 t2}, ...
                             {D1 D2}, {d1 d2}, ...
                             koCost,kiCost, ...
@@ -206,7 +206,7 @@ mcs = CNAMCSEnumerator2(cnap, ...
                             1); % verbose
 %% 6) Output
 % Of the results, 5 gene MCS are selected and returned as text
-selection = round(linspace(1,size(mcs,2),5));
+[~,selection] = unique(mcs_idx);
 mcs_selection = mcs(:,selection);
 ko_text = cell(1,size(mcs_selection,2));
 for i = 1:size(mcs_selection,2)
