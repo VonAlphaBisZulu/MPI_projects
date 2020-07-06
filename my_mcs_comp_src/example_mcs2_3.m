@@ -63,7 +63,6 @@ options.preproc_check_feas = false;
 % load model
 load('iML1515.mat')
 cnap = block_non_standard_products(cnap);
-cnap.reacMin(ismember(cnap.reacID,{'EX_glc__D_e'})) = -10;
 
 % 2,3-butanediol pathways
 cnap = CNAaddSpeciesMFN(cnap,'actn_c',0,'Acetoin');
@@ -84,6 +83,7 @@ cnap = CNAaddReactionMFN(cnap,'EX_23bdo_e','1 23bdo_c =' ,0,1000,0,nan,0,...
 '//START_GENERIC_DATA{;:;deltaGR_0;#;num;#;NaN;:;uncertGR_0;#;num;#;NaN;:;geneProductAssociation;#;str;#;;:;}//END_GENERIC_DATA',0,0,0,0);
 
 % add alternative substrate supplies
+cnap.reacMax(ismember(cnap.reacID,{'EX_glc__D_e'})) = 0;
 cnap.reacMin(ismember(cnap.reacID,{'EX_glc__D_e'})) = -10;
 cnap = CNAaddReactionMFN(cnap,'EX_ac_up_e','1 ac_e =' ,-30,0,0,nan,0,...
 '//START_GENERIC_DATA{;:;deltaGR_0;#;num;#;NaN;:;uncertGR_0;#;num;#;NaN;:;geneProductAssociation;#;str;#;;:;}//END_GENERIC_DATA',0,0,0,0);
