@@ -10,7 +10,7 @@ prod = prod{~cellfun(@isempty,prod)};
 subs = regexp({filesinPath.name}, strjoin(strcat('^S',subs_id,'_.*.xls.*'), '|'), 'match'); % SXX_ABC
 subs = [subs{~cellfun(@isempty,subs)}];
 [~,prod_name] = fileparts(prod{:});
-filename=['_StrainBooster/_My_Simulations/Solutions/' cnap.path '-gMCS-' prod_name '-' datestr(date,'yyyy-mm-dd')];
+filename=['StrainBooster/my_mcs_results/' cnap.path '-gMCS-' prod_name '-' datestr(date,'yyyy-mm-dd')];
 
 %% 2. Adding species and reactions from files
 disp(['Loading reactions and species from file: ' strjoin(prod,', ')]);
