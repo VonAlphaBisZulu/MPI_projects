@@ -3,16 +3,16 @@ if ~exist('cnan','var')
 end
 %% MCS computation parameters
 
-cprodidx = 16;
+cprodidx = 74;
 %csubstidx = [01,14,19];
 csubstidx = 14;
-max_num_interv  = 15;
-max_solutions = 200;
+maxCost  = 15;
+maxSolutions = 10;
 time_limit = 14400; % 14400; % 4 Stunden ; 72000 = 20 Stunden; 39600 = 11 Stunden; 200000 2.5 Tage
-cnap = CNAloadNetwork({'iML1515';1},1,1);
+cnap = CNAloadNetwork({'network_dirs/iML1515';1},1,1);
 % cnap = CNAloadNetwork({'iMLcore';1},1,1);
 % load('iJO1366/iJO1366GeneNames.mat');
-load('iML1515/iML1515GeneNames.mat');
+load('network_dirs/iML1515/iML1515GeneNames.mat');
 cnap = replaceGeneNames(cnap,ecoliGeneNames);
 
 %% SLURM parpool
@@ -48,7 +48,7 @@ else
     error('Specify substrates in integer variable or vector cprodidx');
 end
 
-filepath = './_StrainBooster/_My_Simulations/';
+filepath = './StrainBooster/my_mcs_setups/';
 filesinPath = dir(filepath);
 prod = regexp({filesinPath.name}, ['^P',cprodidx,'_.*.xls.*'], 'match'); % PXX_ABC
 prod = prod{~cellfun(@isempty,prod)};
@@ -72,7 +72,7 @@ for file = subs
     end
 end
 
-[cnap, ~, genes, gr_rules] = CNAgenerateGERassociation( cnap );
+[cnap, enzymes, genes, gpr_rules] = CNAgenerateGPRrules( cnap );
 
 %% Load Cut-Set-Calculation parameters from xls
 [T, t, D, d,rkoCost,rkiCost,reacMin,reacMax,gkoCost,gkiCost,idx] = CNAgetgMCScalcParamXls( cnap, prod, subs, genes);
@@ -82,12 +82,8 @@ cnap.reacMax = reacMax;
 %% MCS filename and flux limit
 filename=['_StrainBooster/_My_Simulations/Solutions/' cnap.path '-gMCS-' prod_name '-' datestr(date,'yyyy-mm-dd')];
 default_flux_limit = 1000;
-
-[gmcs, gcnap, cmp_gmcs, cmp_gcnap, mcs_idx] = CNAgeneMultiImposedMCSFinder(cnap, T , t , D , d ,...
-                                                rkoCost,rkiCost, ... koCost, kiCost
-                                                max_num_interv,time_limit,max_solutions,...
-                                                1,0, ... use_compression,use_bigM,
-                                                1,gkoCost,gkiCost,[],1); % enum_method, gkoCost, gkiCost, gr_rules, verbose
+[rmcs, gmcs, gcnap, cmp_gmcs, cmp_gcnap, mcs_idx_cmp_full, status, obj] = ...
+    CNAgeneMCSEnumerator2(cnap,T,t,D,d,rkoCost,rkiCost,maxSolutions,maxCost,gkoCost,gkiCost,gpr_rules,[],1);
 
 gmcs = sparse(gmcs);
 save([filename '.mat'],'cnap', 'gr_rules', 'gcnap', 'gmcs', 'gkoCost', 'gkiCost', 'cmp_gcnap', 'cmp_gmcs', 'mcs_idx', 'T', 't', 'D', 'd','-v7.3');

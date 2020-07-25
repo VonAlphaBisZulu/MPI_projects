@@ -123,6 +123,7 @@ ctype_pk4 = [repmat('C',1,2*size(A,2)),'B'];
 [~,opt_pk1,~] = intlinprog(c_pk4, find(ctype_pk4=='B'), A_pk4, b_pk4, [], [], lb_pk4, ub_pk4,[],intlinprog_options);
 
 % with reaction 6 on (z >= 0) should permit a higher maximum growth (7)
+b_pk4(end-1) = 0;
 b_pk4(end) = 0;
 [~,opt_pk2,~] = intlinprog(c_pk4, find(ctype_pk4=='B'), A_pk4, b_pk4, [], [], lb_pk4, ub_pk4,[],intlinprog_options);
 

@@ -1,4 +1,4 @@
-function TableReads = loadSpecReacXLStoStrArray( met_reac_set_path )
+function [table_reads sheets] = loadSpecReacXLStoStrArray( met_reac_set_path )
     % Returns a 3D string table that contains all information imported from an
     % xls-file. Dimentions are derived from worksheet with the biggest range
     %
@@ -11,20 +11,20 @@ function TableReads = loadSpecReacXLStoStrArray( met_reac_set_path )
         for i=1:length(sheets)
             [~,~,workSheet] = xlsread(filepath,char(sheets(i)));
             if ~isempty(workSheet)
-                TableReads(1:size(workSheet,1),1:size(workSheet,2),i) = workSheet;
+                table_reads(1:size(workSheet,1),1:size(workSheet,2),i) = workSheet;
             end
         end
-        TableReads = strTable(TableReads);
+        table_reads = strTable(table_reads);
     else
         sheets = sheetnames(filepath);
         % Import data to 3D array [row,column,sheet]
         for i=1:length(sheets)
             workSheet = readcell(which(met_reac_set_path),'sheet',i);
             if ~isempty(workSheet)
-                TableReads(1:size(workSheet,1),1:size(workSheet,2),i) = workSheet;
+                table_reads(1:size(workSheet,1),1:size(workSheet,2),i) = workSheet;
             end
         end
-        TableReads = strTable(TableReads);
+        table_reads = strTable(table_reads);
     end
 end
 

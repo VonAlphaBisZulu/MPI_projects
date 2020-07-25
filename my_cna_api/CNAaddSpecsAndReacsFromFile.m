@@ -1,4 +1,4 @@
-function cnap = CNAaddSpecsAndReacsFromFile( cnap, spec_reac_set_path, bIgnoreFalseEntries )
+function cnap = CNAaddSpecsAndReacsFromFile( cnap, spec_reac_set_path )
 global cnan;
     %%  Import species, reactions and a fluxmap from a xls-file
     % cnap                :  CNA project object
@@ -49,24 +49,26 @@ global cnan;
 
     %% ======= read out xls-file and pre-process information ==============
     % read out xls-file and put data into a 3D-string-array
-    TableReads = loadSpecReacXLStoStrArray(spec_reac_set_path);
+    [table_reads sheets] = loadSpecReacXLStoStrArray(spec_reac_set_path);
 
     % Identify sheets that contain Species, Reaction and Map information
 
     % ------------------ identify Species sheet ---------------------------
     % Find "sheet" with species list and predefine empty struct-array to collect
     % all species to add
-    [sidrow,sidcol,specSheet]   = ind2sub(size(TableReads),find(strcmp(strtrim(TableReads),'spec_id')));
+    [sidrow,sidcol,specSheet]   = ind2sub(size(table_reads),find(strcmp(strtrim(table_reads),'spec_id')));
     species = repmat(struct(...
-                            'spec_id',          '',...
+                            'spec_id',     '',...
                             'spec_ext',    0,...
-                            'spec_name',        '',...
-                            'spec_notes',''),0);
+                            'spec_name',   '',...
+                            'spec_notes',  '',...
+                            'fbc_chemicalFormula','',...
+                            'fbc_charge',  0),0);
 
     % ------------------ identify Reacions sheet --------------------------
     % Find "sheet" with reaction list and predefine empty struct-array to collect
     % all reactions to add
-    [ridrow,ridcol,reacSheet]  = ind2sub(size(TableReads),find(strcmp(strtrim(TableReads),'reac_id')));
+    [ridrow,ridcol,reacSheet]  = ind2sub(size(table_reads),find(strcmp(strtrim(table_reads),'reac_id')));
     reactions = repmat(struct(...
                                 'reac',           '',...
                                 'equation',     '',...
@@ -75,16 +77,17 @@ global cnan;
                                 'objCoeff',     0,...
                                 'defaultRate',  '#',...
                                 'measVar',      0,...
-                                'notes',       '',...
+                                'fbc_geneProductAssociation', '',...
+                                'notes',        '',...
                                 'flxMapNo',     1,...
                                 'editable',     1,...
                                 'xpos',         20,...
                                 'ypos',         20,...
-                                'sbdr',         0),0);
+                                'change_bounds_only',         0),0);
 
     % ---------------------- identify Map sheet ---------------------------
     % Find "sheet" with path to map and set path
-    [~,mppCol,mapSheet]  = ind2sub(size(TableReads),find(strcmp(strtrim(TableReads),'map_path')));
+    [~,mppCol,mapSheet]  = ind2sub(size(table_reads),find(strcmp(strtrim(table_reads),'map_path')));
     map = repmat(struct('map_path','','map_name',''),1);
 
     if sum(reacSheet == specSheet)~=0
@@ -98,14 +101,14 @@ global cnan;
     %  ---------------------- Parse map -----------------------------------
     if ~isempty(mapSheet)
         % find column where map name defined
-        [~,mpncol,~]   = find(strcmp(strtrim(TableReads(:,:,mapSheet)),'map_name'));
-        map.map_path = char(TableReads(2,mppCol,mapSheet));
+        [~,mpncol,~]   = find(strcmp(strtrim(table_reads(:,:,mapSheet)),'map_name'));
+        map.map_path = char(table_reads(2,mppCol,mapSheet));
         [fpath,file,ext] = fileparts(which(spec_reac_set_path));
         map.map_path = [relPathToFrom(fpath,[pwd '/' cnap.path]) '/' map.map_path];
 
         % set map name (if not defined in xls-file, the map is named after the image file)
-        if ~isempty(TableReads(2,mpncol,mapSheet))
-            map.map_name = char(TableReads(2,mpncol,mapSheet));
+        if ~isempty(table_reads(2,mpncol,mapSheet))
+            map.map_name = char(table_reads(2,mpncol,mapSheet));
         else
             [~,map.map_name,~] = fileparts(map.map_path);
         end
@@ -115,20 +118,22 @@ global cnan;
     if ~isempty(specSheet)
         % find columns where species parameters are defined
         %    spec_bool_ext is mandatory
-        [sexrow,sexcol,~]   = find(strcmp(strtrim(TableReads(:,:,specSheet)),'spec_bool_ext'));
+        [sexrow,sexcol,~]   = find(strcmp(strtrim(table_reads(:,:,specSheet)),'spec_bool_ext'));
         
         if isempty(sexrow) || sum(sexrow~=1)
             error('Make sure spec_bool_ext located in the header line');
         end
-        [~,snmcol,~]   = find(strcmp(strtrim(TableReads(:,:,specSheet)),'spec_name'));
-        [~,sntcol,~]   = find(strcmp(strtrim(TableReads(:,:,specSheet)),'spec_notes'));
+        [~,snmcol,~]   = find(strcmp(strtrim(table_reads(:,:,specSheet)),'spec_name'));
+        [~,sntcol,~]   = find(strcmp(strtrim(table_reads(:,:,specSheet)),'spec_notes'));
+        [~,sfmcol,~]   = find(strcmp(strtrim(table_reads(:,:,specSheet)),'fbc_chemicalFormula'));
+        [~,schcol,~]   = find(strcmp(strtrim(table_reads(:,:,specSheet)),'fbc_charge'));
 
         % Read species information, define them and structs and list them in an array
         % Iterate through all ids. Stop at first occurence of empty spec_id field;
-        lastrow = find(strcmp(strtrim(TableReads(:,sidcol,specSheet)),''),1,'first')-1;
+        lastrow = find(strcmp(strtrim(table_reads(:,sidcol,specSheet)),''),1,'first')-1;
         % Else take last row with content
         if isempty(lastrow)
-            lastrow = find(~strcmp(strtrim(TableReads(:,sidcol,specSheet)),''),1,'last');
+            lastrow = find(~strcmp(strtrim(table_reads(:,sidcol,specSheet)),''),1,'last');
         end
         % Iteration through species/lines
         for row = 2:lastrow
@@ -137,22 +142,30 @@ global cnan;
                 'spec_id','',...
                 'spec_ext',0,...
                 'spec_name','',...
-                'spec_notes',''),1);   % Initialize new species
+                'spec_notes','',...
+                'fbc_chemicalFormula','',...
+                'fbc_charge',  0),1);   % Initialize new species
             % fill structure
-            newspec.spec_id = TableReads(row,sidcol,specSheet); % ID
+            newspec.spec_id = table_reads(row,sidcol,specSheet); % ID
             try                                                 % External or internal
-                newspec.spec_ext = str2double(char(TableReads(row,sexcol,specSheet)));
+                newspec.spec_ext = str2double(char(table_reads(row,sexcol,specSheet)));
             catch ME
                 error([newspec.spec_id ': Ambiguous entry in line in xls-file. Aborting. No changes have been made to the project.',char(10),ME.identifier,': ',ME.message]);
             end
-            if ~isempty(TableReads(row,snmcol,specSheet))       % species Name
-                newspec.spec_name = TableReads(row,snmcol,specSheet);
+            if ~isempty(table_reads(row,snmcol,specSheet))       % species Name
+                newspec.spec_name = table_reads(row,snmcol,specSheet);
             else
                 warning([char(newspec.spec_id) ': No name defined - metabolie was named by its id']);
                 newspec.spec_name = newspec.spec_id;
             end
-            if ~isempty(TableReads(row,sntcol,specSheet))       % species Notes
-                newspec.spec_notes = TableReads(row,sntcol,specSheet);
+            if ~isempty(table_reads(row,sntcol,specSheet))       % species Notes
+                newspec.spec_notes = table_reads(row,sntcol,specSheet);
+            end
+            if ~isempty(table_reads(row,sfmcol,specSheet))       % species chemical formula
+                newspec.fbc_chemicalFormula = table_reads(row,sfmcol,specSheet);
+            end
+            if ~isempty(table_reads(row,schcol,specSheet))       % species charge
+                newspec.fbc_charge = str2double(char(table_reads(row,schcol,specSheet)));
             end
             species = [species newspec];
         end
@@ -161,26 +174,27 @@ global cnan;
     if ~isempty(reacSheet)
         % find columns where reaction parameters are defined
         %    reac_eq and reac_dRate are mandatory
-        [reqrow,reqcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_eq'));
+        [reqrow,reqcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_eq'));
 
-        [~,rdrcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_dRate'));
-        [~,rlbcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_lb'));
-        [~,rubcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_ub'));
-        [~,roccol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_objcoeff'));
-        [~,rmvcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_measVar'));
-        [~,rntcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_notes'));
-        [~,rfmcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_flxMpNo'));
-        [~,redcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_editable'));
-        [~,rxpcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_xpos'));
-        [~,rypcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_ypos'));
-        [~,rsbcol,~]   = find(strcmp(strtrim(TableReads(:,:,reacSheet)),'reac_sbdr'));
+        [~,rdrcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_dRate'));
+        [~,rlbcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_lb'));
+        [~,rubcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_ub'));
+        [~,roccol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_objcoeff'));
+        [~,rmvcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_measVar'));
+        [~,rgpcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'fbc_geneProductAssociation'));
+        [~,rntcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_notes'));
+        [~,rfmcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_flxMpNo'));
+        [~,redcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_editable'));
+        [~,rxpcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_xpos'));
+        [~,rypcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'reac_ypos'));
+        [~,rsbcol,~]   = find(strcmp(strtrim(table_reads(:,:,reacSheet)),'change_bounds_only'));
 
         % Read Reaction information, define them and structs and list them in an array
         % Iterate through all ids. Stop at first occurence of empty reac_id field;
-        lastrow = find(strcmp(strtrim(TableReads(:,ridcol,reacSheet)),''),1,'first')-1;
+        lastrow = find(strcmp(strtrim(table_reads(:,ridcol,reacSheet)),''),1,'first')-1;
         % Else take last row with content
         if isempty(lastrow)
-            lastrow = find(~strcmp(strtrim(TableReads(:,ridcol,reacSheet)),''),1,'last');
+            lastrow = find(~strcmp(strtrim(table_reads(:,ridcol,reacSheet)),''),1,'last');
         end
         for row = 2:lastrow
             newreac = repmat(struct(...
@@ -189,64 +203,68 @@ global cnan;
                 'lb',           0,...
                 'ub',           100,...
                 'objCoeff',     0,...
-                'defaultRate',  '#',...
+                'defaultRate',  nan,...
                 'measVar',      0,...
+                'fbc_geneProductAssociation' ,'', ...
                 'notes',       '',...
                 'flxMapNo',     '-1',...
                 'editable',     1,...
                 'xpos',         20,...
                 'ypos',         20,...
-                'sbdr',         0),1);  % Initialize new Reaction
+                'change_bounds_only',         0),1);  % Initialize new Reaction
             
-            newreac.reac = strtrim(char(TableReads(row,ridcol,reacSheet)));         % ID
+            newreac.reac = strtrim(char(table_reads(row,ridcol,reacSheet)));         % ID
             try
-                newreac.equation  = char(TableReads(row,reqcol,reacSheet)); % Reaction equation
+                newreac.equation  = char(table_reads(row,reqcol,reacSheet)); % Reaction equation
             catch ME
                 error([newspec.reac ': Ambiguous entry in line in xls-file. Aborting. No changes have been made to the project.',char(10), ME.identifier,': ',ME.message]);
             end
-            if ~isempty(char(TableReads(row,rlbcol,reacSheet)))         % Reaction lower bound
-                newreac.lb = str2double(char(TableReads(row,rlbcol,reacSheet)));
+            if ~isempty(char(table_reads(row,rlbcol,reacSheet)))         % Reaction lower bound
+                newreac.lb = str2double(char(table_reads(row,rlbcol,reacSheet)));
             end
-            if ~isempty(char(TableReads(row,rubcol,reacSheet)))         % Reaction upper bound
-                newreac.ub = str2double(char(TableReads(row,rubcol,reacSheet)));
+            if ~isempty(char(table_reads(row,rubcol,reacSheet)))         % Reaction upper bound
+                newreac.ub = str2double(char(table_reads(row,rubcol,reacSheet)));
             end
-            if ~isempty(char(TableReads(row,roccol,reacSheet)))         % Objective coefficient
-                newreac.objCoeff = str2double(char(TableReads(row,roccol,reacSheet)));
+            if ~isempty(char(table_reads(row,roccol,reacSheet)))         % Objective coefficient
+                newreac.objCoeff = str2double(char(table_reads(row,roccol,reacSheet)));
             end
-            if ~isempty(char(TableReads(row,rdrcol,reacSheet)))         % Default reaction rate
-                newreac.defaultRate = char(TableReads(row,rdrcol,reacSheet));
+            if ~isempty(char(table_reads(row,rdrcol,reacSheet)))         % Default reaction rate
+                newreac.defaultRate = str2double(char(table_reads(row,rdrcol,reacSheet)));
             end
-            if ~isempty(char(TableReads(row,rmvcol,reacSheet)))         % Measuring variance
-                newreac.measVar = str2double(char(TableReads(row,rmvcol,reacSheet)));
+            if ~isempty(char(table_reads(row,rmvcol,reacSheet)))         % Measuring variance
+                newreac.measVar = str2double(char(table_reads(row,rmvcol,reacSheet)));
             end
-            if ~isempty(char(TableReads(row,rntcol,reacSheet)))         % Notes
-                newreac.notes = char(TableReads(row,rntcol,reacSheet));
+            if ~isempty(char(table_reads(row,rgpcol,reacSheet)))         % gprRules
+                newreac.fbc_geneProductAssociation = char(table_reads(row,rgpcol,reacSheet));
             end
-            if ~isempty(char(TableReads(row,rfmcol,reacSheet)))         % Flux map index
-                newreac.flxMapNo = char(TableReads(row,rfmcol,reacSheet));
+            if ~isempty(char(table_reads(row,rntcol,reacSheet)))         % Notes
+                newreac.notes = char(table_reads(row,rntcol,reacSheet));
             end
-            if ~isempty(char(TableReads(row,redcol,reacSheet)))         % Is editable
-                if any(str2double(char(TableReads(row,redcol,reacSheet))) == [1,2,3])
-                    newreac.editable = str2double(char(TableReads(row,redcol,reacSheet)));
+            if ~isempty(char(table_reads(row,rfmcol,reacSheet)))         % Flux map index
+                newreac.flxMapNo = char(table_reads(row,rfmcol,reacSheet));
+            end
+            if ~isempty(char(table_reads(row,redcol,reacSheet)))         % Is editable
+                if any(str2double(char(table_reads(row,redcol,reacSheet))) == [1,2,3])
+                    newreac.editable = str2double(char(table_reads(row,redcol,reacSheet)));
                 else
                     newreac.editable = 1;
                 end
             end
-            if ~isempty(char(TableReads(row,rxpcol,reacSheet)))        % x position
-                newreac.xpos = str2double(char(TableReads(row,rxpcol,reacSheet)));
+            if ~isempty(char(table_reads(row,rxpcol,reacSheet)))        % x position
+                newreac.xpos = str2double(char(table_reads(row,rxpcol,reacSheet)));
             end
-            if ~isempty(char(TableReads(row,rypcol,reacSheet)))        % y position
-                newreac.ypos = str2double(char(TableReads(row,rypcol,reacSheet)));
+            if ~isempty(char(table_reads(row,rypcol,reacSheet)))        % y position
+                newreac.ypos = str2double(char(table_reads(row,rypcol,reacSheet)));
             end
-            if ~isempty(char(TableReads(row,rsbcol,reacSheet)))        % is reaction added or are only boundaries and default rate set
-                newreac.sbdr = str2double(char(TableReads(row,rsbcol,reacSheet)));
+            if ~isempty(char(table_reads(row,rsbcol,reacSheet)))        % is reaction added or are only boundaries and default rate set
+                newreac.change_bounds_only = str2double(char(table_reads(row,rsbcol,reacSheet)));
             else
-                newreac.sbdr = 0;
+                newreac.change_bounds_only = 0;
             end
 
             reactions = [reactions newreac];
             if isempty(reqrow)
-                if ~newreac.sbdr
+                if ~newreac.change_bounds_only
                     error('It was attempted to add a new reaction to the model without defining a reaction equation.');
                 end
             end
@@ -314,6 +332,7 @@ global cnan;
         for spec = species
             n = find(strcmp(strtrim([species.spec_id]'),spec.spec_id));
             cnap = CNAaddSpeciesMFN(cnap,spec);
+            cnap = CNAsetGenericSpeciesData(cnap,cnap.nums,'fbc_chemicalFormula',char(spec.fbc_chemicalFormula),'fbc_charge',double(spec.fbc_charge));
         end
     catch ME
         % species already exists in model
@@ -333,7 +352,16 @@ global cnan;
     try
         for reac = reactions
             n = find(strcmp(strtrim({reactions.reac}'),reac.reac));
-            cnap = CNAaddReactionMFN(cnap,reac);
+            if ~any(ismember(cellstr(cnap.reacID),reac.reac))
+                cnap = CNAaddReactionMFN(cnap,reac);
+                cnap = CNAsetGenericReactionData(cnap,cnap.numr,'geneProductAssociation',char(reac.fbc_geneProductAssociation));
+            elseif reac.change_bounds_only
+                rid = find(ismember(cellstr(cnap.reacID),reac.reac));
+                cnap.reaMin(rid) = reac.lb;
+                cnap.reaMax(rid) = reac.ub;
+            else
+                error(['reaction ' reac.reac ' already exists in model. Please mark reaction in xls as ''change_bounds_only''']);
+            end
         end
     catch ME
         % reaction already exists in model
@@ -354,7 +382,7 @@ global cnan;
     % correctly if this function isn't called
     %
     % With less than 50 reaction on the generated map, also show reaction equation
-        cnap = myCNAgenerateMap(cnap,sum(cnap.reacBoxes(:,5) == -1) < 50);
+        cnap = CNAgenerateMap(cnap,sum(cnap.reacBoxes(:,5) == -1) < 50,0);
     end
     
 end
