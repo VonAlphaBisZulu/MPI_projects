@@ -40,25 +40,135 @@ check_mass_balance(cnap);
 cnap.reacMin = reacMin;
 cnap.reacMax = reacMax;
 
-idx.growth = find(~~cnap.objFunc);
-fv = CNAoptimizeFlux(cnap);
-fv(~cnap.objFunc) = nan;
-fv = 0.3*fv;
-Ymax = CNAoptimizeYield(cnap,full(sparse(1,idx.prod,T{:}(1,idx.prod),1,cnap.numr)),full(sparse(1,idx.growth,1,1,cnap.numr)),fv);
-Y_thresh = Ymax * 0.3;
-disp(Y_thresh);
+cnap.mcs.T = T;
+cnap.mcs.t = t;
+cnap.mcs.D = D;
+cnap.mcs.d = d;
+cnap.mcs.rkiCost = rkiCost;
+cnap.mcs.rkoCost = rkoCost;
+cnap.mcs.gpr_rules = gpr_rules;
+cnap.mcs.genes = genes;
+cnap.mcs.gkiCost = gkiCost;
+cnap.mcs.gkoCost = gkoCost;
+cnap.mcs.max_num_interv = max_num_interv;
+cnap.mcs.options = options;
+
+%% This can be used to compute the target yield (per biomass or glucose uptake)
+idx.bm = find(~~cnap.objFunc);
+idx.prodYieldFactor = T{:}(1,idx.prod);
+% fv = CNAoptimizeFlux(cnap);
+% fv(~cnap.objFunc) = nan;
+% fv = 0.3*fv;
+% Ymax = CNAoptimizeYield(cnap,full(sparse(1,idx.prod,T{:}(1,idx.prod),1,cnap.numr)),full(sparse(1,idx.bm,1,1,cnap.numr)),fv);
+% Y_thresh = Ymax * 0.3;
+% disp(Y_thresh);
 
 %% 6. Compute MCS
 [rmcs, gmcs, gcnap, cmp_gmcs, cmp_gcnap, mcs_idx_cmp_full] = ...
     CNAgeneMCSEnumerator2(cnap,T,t,D,d,rkoCost,rkiCost,max_solutions,max_num_interv,gkoCost,gkiCost,gpr_rules,options,1);
 
+cnap.mcs.rmcs = rmcs;
+
 gmcs = sparse(gmcs);
 save([filename '.mat'],'cnap', 'rmcs', 'gmcs', 'gcnap', 'cmp_gmcs', 'cmp_gcnap', 'mcs_idx_cmp_full', 'gpr_rules','-v7.3');
 
-evalgMCS2;
+%% 7. Characterization and ranking of MCS
+% Instead of the gene-MCS, their corresponding reaction-representations are analyzed.
+% This is preferred, because the reaction-model is smaller and therefore analysis is 
+% faster than in the GPR-extended model. Furthermore different gene-MCS can lead to 
+% identical 'phenotypes' when translated to the reaction-model and by analyzing rMCS
+% only a reduced, non-redundant set of reaction-MCS needs therefore to be considered.
+if full(~all(all(isnan(gmcs)))) % if mcs have been found
+    disp('Characterizing mcs');
+  % 5.1) Lump redundant MCS and create flux bounds for each mutant model
+    rmcs(isnan(rmcs)) = -inf; % this step allows to apply 'unique' too remove duplicates
+    [rmcs,~,gmcs_rmcs_map] = unique(rmcs','rows');
+    rmcs = rmcs';
+    rmcs(rmcs == -inf) = nan;
+    MCS_mut_lb = repmat({cnap.reacMin},1,size(rmcs,2));
+    MCS_mut_ub = repmat({cnap.reacMax},1,size(rmcs,2));
+    MCS_mut_lb = arrayfun(@(x) MCS_mut_lb{x}.*(rmcs(:,x)==1 | rmcs(:,x)==0),1:size(rmcs,2),'UniformOutput',0);
+    MCS_mut_ub = arrayfun(@(x) MCS_mut_ub{x}.*(rmcs(:,x)==1 | rmcs(:,x)==0),1:size(rmcs,2),'UniformOutput',0);
+  % 5.2) Set relevant indices [criterion 2-7] and prepare thermodynamic (MDF) parameters [criterion 9]
+    % reaction indices
+    [idx,mdfParam] = relev_indc_and_mdf_Param(cnap,idx);
 
-save([filename '.mat'], 'IS_rankingStruct', 'IS_rankingTable','-append');
+  % 5.3) Define core metabolism [criterion 8]
+    % Add the new reactions also to the list of reactions that will be
+    % considered "core" reactions in the final MCS characterization and ranking
+    new_reacs = ismember(cellstr(cnap.reacID),{'ACLDC','BTDD','EX_23bdo_e'});
+    reac_in_core_metabolism(new_reacs) = 1;
+    lbCore = cnap.reacMin;
+    ubCore = cnap.reacMax;
+    lbCore(~reac_in_core_metabolism) = 0;
+    ubCore(~reac_in_core_metabolism) = 0;
+  % 5.4) Costs for genetic interventions  [criterion 10]
+    intvCost                  = gcnap.mcs.kiCost;
+    intvCost(isnan(intvCost)) = gcnap.mcs.koCost(isnan(intvCost));
+    intvCost(gcnap.rType == 'g') = 1;
+    gene_and_reac_names = cellstr(gcnap.reacID);
+    gene_and_reac_names(gcnap.rType == 'g') = genes; % to avoid the 'GR-' prefix
+  % 5.5) Start characterization and ranking
+    [MCS_rankingStruct, MCS_rankingTable]...
+        = CNAcharacterizeGeneMCS( cnap , MCS_mut_lb, MCS_mut_ub, 1:size(MCS_mut_lb,2),... model, mutants LB,UB, incices ranked mcs
+        idx, idx.cytMet, D, d, T, t, mdfParam, ... relevant indices, Desired and Target regions
+        lbCore, ubCore, gmcs, intvCost, gene_and_reac_names, gmcs_rmcs_map, ...
+        0:10, ones(1,10),2); % assessed criteria and weighting factors
+    % save ranking and textual gmcs as tab-separated-values
+    cell2csv([filename '.tsv'],MCS_rankingTable,char(9));
+    text_gmcs = cell(size(gmcs,2),1);
+    for i = 1:size(gmcs,2)
+        kos = find(~isnan(gmcs(:,i)) & gmcs(:,i) ~= 0);
+        for j = 1:length(kos)
+            text_gmcs(i,j) = cellstr(gcnap.reacID(kos(j),:));
+        end
+    end
+    cell2csv([filename '-gmcs.tsv'],text_gmcs,char(9));
+    save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','-append');
+end
+
+% clear irrelevant variables
+a=[setdiff(who,{'cnap','rmcs','D','d','T','t','compression','filename','gcnap',...
+                'gmcs','gmcs_rmcs_map','gpr_rules','rmcs','valid','comp_time'});{'a'}];
+rmpath(function_path);
+clear(a{:});
 
 end
 
-
+function [idx,mdfParam] = relev_indc_and_mdf_Param(cnap,idx)
+% function is used to find reaction and species indices that are used for
+% the characterization and ranking of MCS
+    % relevant reaction indices
+    idx.o2      = find(~cellfun(@isempty ,regexp(cellstr(cnap.reacID),'.*EX_o2_e.*','match')));
+    idx.atpm    = find(~cellfun(@isempty ,regexp(cellstr(cnap.reacID),'.*ATPM','match')));
+    % relevant species indices
+    idx.cytMet = find(~cellfun(@isempty ,regexp(cellstr(cnap.specID),'_c$','match')));
+    % other important species
+%     idx.pi    = find(strcmp(cellstr(cnap.specID), 'pi_c')); 
+% (adding idx.pi activates the output of coupling mechanism analysis (not yet functional))
+    idx.h     = find(strcmp(cellstr(cnap.specID), 'h_c'));
+    idx.h2o   = find(strcmp(cellstr(cnap.specID), 'h2o_c'));
+    idx.atp   = find(strcmp(cellstr(cnap.specID), 'atp_c'));
+    idx.adp   = find(strcmp(cellstr(cnap.specID), 'adp_c'));
+    idx.amp   = find(strcmp(cellstr(cnap.specID), 'amp_c'));
+    idx.nad   = find(strcmp(cellstr(cnap.specID), 'nad_c'));
+    idx.nadh  = find(strcmp(cellstr(cnap.specID), 'nadh_c'));
+    idx.nadp  = find(strcmp(cellstr(cnap.specID), 'nadp_c'));
+    idx.nadph = find(strcmp(cellstr(cnap.specID), 'nadph_c'));
+    idx.co2_e = find(strcmp(cellstr(cnap.specID), 'co2_c'));
+    idx.glc_e = find(strcmp(cellstr(cnap.specID), 'glc__D_e'));
+    % MDF setup (thermodynamic benchmark)
+    mdfParam.Cmin    = 1e-6*ones(cnap.nums,1);
+    mdfParam.Cmin(idx.glc_e) = 1e-6;
+    mdfParam.Cmax = 0.02*ones(cnap.nums,1);
+    mdfParam.Cmax(idx.co2_e) = 1e-4;
+    mdfParam.Cmax(idx.glc_e) = 0.055557;
+    mdfParam.fixed_ratios(1,1:3) = [idx.atp   idx.adp   10];
+    mdfParam.fixed_ratios(2,1:3) = [idx.adp   idx.amp    1];
+    mdfParam.fixed_ratios(3,1:3) = [idx.nad   idx.nadh  10];
+    mdfParam.fixed_ratios(4,1:3) = [idx.nadph idx.nadp  10];
+    mdfParam.RT = 8.31446*300/1000; % Computation of MDF in kJ
+    mdfParam.bottlenecks = 0; % change to 1 to compute thermodynamic bottlenecks
+    mdfParam.G0 = cell2mat(CNAgetGenericReactionData_as_array(cnap,'deltaGR_0'));
+    mdfParam.uncert = cell2mat(CNAgetGenericReactionData_as_array(cnap,'uncertGR_0'));
+end
