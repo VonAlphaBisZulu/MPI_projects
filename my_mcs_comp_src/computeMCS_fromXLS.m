@@ -1,4 +1,4 @@
-function [rmcs, cnap, gmcs, gcnap, cmp_mcs, cmp_cnap, mcs_idx_cmp_full, file_prod, file_subs] = computeMCS_fromXLS(cnap,prod_id,subs_id,filepath,max_solutions,max_num_interv,options);
+function [rmcs, cnap, gmcs, gcnap, cmp_gmcs, cmp_gcnap, mcs_idx_cmp_full, prod, subs] = computeMCS_fromXLS(cnap,prod_id,subs_id,filepath,max_solutions,max_num_interv,options);
 
 %% 1. Identifying product and substrate files
 prod_id = num2str(prod_id,'%02i');
@@ -10,7 +10,8 @@ prod = prod{~cellfun(@isempty,prod)};
 subs = regexp({filesinPath.name}, strjoin(strcat('^S',subs_id,'_.*.xls.*'), '|'), 'match'); % SXX_ABC
 subs = [subs{~cellfun(@isempty,subs)}];
 [~,prod_name] = fileparts(prod{:});
-filename=['StrainBooster/my_mcs_results/' cnap.path '-gMCS-' prod_name '-' datestr(date,'yyyy-mm-dd')];
+[~,model_name] = fileparts(cnap.path);
+filename=['StrainBooster/my_mcs_results/' model_name '-gMCS-' prod_name '-' datestr(date,'yyyy-mm-dd')];
 
 %% 2. Adding species and reactions from files
 disp(['Loading reactions and species from file: ' strjoin(prod,', ')]);
@@ -97,6 +98,9 @@ if full(~all(all(isnan(gmcs)))) % if mcs have been found
     % Add the new reactions also to the list of reactions that will be
     % considered "core" reactions in the final MCS characterization and ranking
     new_reacs = ismember(cellstr(cnap.reacID),{'ACLDC','BTDD','EX_23bdo_e'});
+    reac_in_core_metabolism = cell2mat(CNAgetGenericReactionData_as_array(cnap,'core_reac'));
+    reac_in_core_metabolism(isnan(reac_in_core_metabolism)) = 1;
+    reac_in_core_metabolism = logical(reac_in_core_metabolism);
     reac_in_core_metabolism(new_reacs) = 1;
     lbCore = cnap.reacMin;
     ubCore = cnap.reacMax;
@@ -126,13 +130,6 @@ if full(~all(all(isnan(gmcs)))) % if mcs have been found
     cell2csv([filename '-gmcs.tsv'],text_gmcs,char(9));
     save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','-append');
 end
-
-% clear irrelevant variables
-a=[setdiff(who,{'cnap','rmcs','D','d','T','t','compression','filename','gcnap',...
-                'gmcs','gmcs_rmcs_map','gpr_rules','rmcs','valid','comp_time'});{'a'}];
-rmpath(function_path);
-clear(a{:});
-
 end
 
 function [idx,mdfParam] = relev_indc_and_mdf_Param(cnap,idx)
