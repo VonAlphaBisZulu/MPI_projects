@@ -128,7 +128,8 @@ if full(~all(all(isnan(gmcs)))) % if mcs have been found
     intvCost(isnan(intvCost)) = gcnap.mcs.koCost(isnan(intvCost));
     intvCost(gcnap.rType == 'g') = 1;
     gene_and_reac_names = cellstr(gcnap.reacID);
-    gene_and_reac_names(gcnap.rType == 'g') = genes; % to avoid the 'GR-' prefix
+    gene_and_reac_names(gcnap.rType == 'g') = cellstr(gcnap.reacID((gcnap.rType == 'g'),4:end)); % to avoid the 'GR-' prefix
+    gene_and_reac_names(gcnap.rType == 'g') = strrep(strrep(gene_and_reac_names(gcnap.rType == 'g'),'(',''),')',''); % remove brackets
   % 5.5) Start characterization and ranking
     [MCS_rankingStruct, MCS_rankingTable]...
         = CNAcharacterizeGeneMCS( cnap , MCS_mut_lb, MCS_mut_ub, 1:size(MCS_mut_lb,2),... model, mutants LB,UB, incices ranked mcs
