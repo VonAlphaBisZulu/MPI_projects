@@ -7,8 +7,8 @@ options.milp_solver          = 'matlab_cplex'; % 'matlab_cplex';
 % max_solutions                = 5;
 % max_num_interv               = 200;
 
-prod_id = 74;
-subs_id = 1;
+% prod_id = 74;
+% subs_id = 1;
 % subs_id = [01,14,19];
 filepath = './StrainBooster/my_mcs_setups/';
 

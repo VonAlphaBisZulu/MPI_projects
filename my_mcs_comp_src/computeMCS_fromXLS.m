@@ -88,7 +88,7 @@ disp('some gene MCS:');
 disp(gko_text);
 
 gmcs = sparse(gmcs);
-save([filename '.mat'],'cnap', 'rmcs', 'gmcs', 'gcnap', 'cmp_gmcs', 'cmp_gcnap', 'mcs_idx_cmp_full', 'gko_text', 'gpr_rules','-v7.3');
+save([filename '.mat'],'cnap', 'idx', 'rmcs', 'gmcs', 'gcnap', 'cmp_gmcs', 'cmp_gcnap', 'mcs_idx_cmp_full', 'gko_text', 'gpr_rules','-v7.3');
 
 %% 7. Characterization and ranking of MCS
 % Instead of the gene-MCS, their corresponding reaction-representations are analyzed.
