@@ -1,14 +1,14 @@
 startup_CNA_parpool();
 cnap = CNAloadNetwork({'network_dirs/iML1515';1},1,1);
 
-options.milp_solver          = 'java_cplex'; % 'matlab_cplex'; 
+options.milp_solver          = 'matlab_cplex'; % 'matlab_cplex'; 
 % options.milp_time_limit      = inf;  % 14400; % 4 Stunden ; 72000 = 20 Stunden; 39600 = 11 Stunden; 200000 2.5 Tage
 % options.mcs_search_mode      = 1;
 % max_solutions                = 5;
-% max_num_interv               = 20;
-% 
-% prod_id = 74;
-% subs_id = 1;
+% max_num_interv               = 200;
+
+prod_id = 74;
+subs_id = 1;
 % subs_id = [01,14,19];
 filepath = './StrainBooster/my_mcs_setups/';
 

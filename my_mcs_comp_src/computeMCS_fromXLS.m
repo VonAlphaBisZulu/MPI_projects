@@ -70,8 +70,25 @@ idx.prodYieldFactor = T{:}(1,idx.prod);
 
 cnap.mcs.rmcs = rmcs;
 
+[~,gselection] = unique(gmcs_idx);
+gmcs_selection = gmcs(:,gselection);
+gko_text = cell(1,size(gmcs_selection,2));
+for i = 1:size(gmcs_selection,2)
+    kis = find(~isnan(gmcs_selection(:,i)) & gmcs_selection(:,i) > 0);
+    kos = find(~isnan(gmcs_selection(:,i)) & gmcs_selection(:,i) < 0);
+    for j = 1:length(kis)
+        gko_text{j,i} = ['+ ' strtrim(gcnap.reacID(kis(j),:))];
+    end
+    gko_text{length(kis)+1,i} = '';
+    for j = length(kis)+2:length(kis)+length(kos)
+        gko_text{j,i} = ['- ' strtrim(gcnap.reacID(kos(j-length(kis)-1),:))];
+    end
+end
+disp('some gene MCS:');
+disp(gko_text);
+
 gmcs = sparse(gmcs);
-save([filename '.mat'],'cnap', 'rmcs', 'gmcs', 'gcnap', 'cmp_gmcs', 'cmp_gcnap', 'mcs_idx_cmp_full', 'gpr_rules','-v7.3');
+save([filename '.mat'],'cnap', 'rmcs', 'gmcs', 'gcnap', 'cmp_gmcs', 'cmp_gcnap', 'mcs_idx_cmp_full', 'gko_text', 'gpr_rules','-v7.3');
 
 %% 7. Characterization and ranking of MCS
 % Instead of the gene-MCS, their corresponding reaction-representations are analyzed.
