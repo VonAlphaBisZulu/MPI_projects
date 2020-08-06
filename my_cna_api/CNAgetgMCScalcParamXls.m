@@ -58,6 +58,8 @@ reacMax(Rmax_idx(Rmax_idx~=0)) = str2double(Rmax(Rmax_idx~=0,2));
 if any(Rmax_idx == 0)
     warning(['Reaction(s) ' strjoin(Rmax(Rmax_idx == 0,1),', ') ' could not be found. Boundaries were not set.']);
 end
+cnap.reacMin = reacMin;
+cnap.reacMax = reacMax;
 
 for i = 1:length(xls_subs_filename)
     table_subst{i} = loadSpecReacXLStoStrArray(char(xls_subs_filename(i)));
@@ -132,12 +134,12 @@ end
 % desiredReacs = desiredReacs(setdiff(1:length(desiredReacs),desired_w_subst_placeholder)); % remove target regions with #subst# placeholder
 
 for i = 1:length(targetReacs)
-    [T{i},t{i}] = genV(targetReacs{i},cellstr(cnap.reacID),reacMin,reacMax);
+    [T{i},t{i}] = genV(targetReacs{i},cellstr(cnap.reacID),cnap);
 end
 
 % generate d, D
 for i = 1:length(desiredReacs)
-    [D{i},d{i}] = genV(desiredReacs{i},cellstr(cnap.reacID),reacMin,reacMax);
+    [D{i},d{i}] = genV(desiredReacs{i},cellstr(cnap.reacID),cnap);
 end
 
 % export idx
@@ -175,13 +177,16 @@ function C = readOut(table,keyword,cols) % returns all cells below the given key
     end
 end
 
-function [V,v] = genV(constraints,reacID,rMin,rMax)
+
+function [V,v] = genV(constraints,reacID,cnap)
 % Generate Vectors V and v so that V*r <= v
 % input: some constraint seperated 3 three cells. e.g.:
 %           r_1 + r_4 / r_3 - r_2    |    >=    |    a
 
     V = [];
     v = [];
+    rMin = nan(cnap.numr,1);
+    rMax = nan(cnap.numr,1);
 
     for j = 1:size(constraints,1)
         % get right hand side
@@ -208,6 +213,7 @@ function [V,v] = genV(constraints,reacID,rMin,rMax)
             % fractional constraint ispreprocessed
         if length(numDiv) == 2
             [div, cdiv] = findReacAndCoeff(numDiv(2),reacID);
+            [rMin(div), rMax(div)] = CNAfluxVariability(cnap,[],[],-1,div,[],[],0);
             % check if all reactions take identical signs (+ or -)
             % this is needed to do the equation rearrangement. If the signs
             % are ambigous, a lot of case differentiations would be needed,
@@ -215,19 +221,17 @@ function [V,v] = genV(constraints,reacID,rMin,rMax)
             if any(rMin(div).*rMax(div) < 0)
                 error(['reactions that are part of the divisor inside the '... 
                         'target constraints must not span a positive AND negative range']);
-            else
-                rDir = sign(rMin(div)+rMax(div));
-                if any(rDir.*cdiv' > 0) &&  any(rDir.*cdiv' < 0)
-                    error(['reactions that are part of the divisor inside the '...
-                           'target constraints must all have the same direction '...
-                           '(positive or negative). Please check if coefficients and '...
-                           'reaction ranges lead to all positive or all negative variables.']);
-                else
-                    if sign(sum(rDir.*cdiv')) == -1 % if the divisor is all negative
-                        % change direction of inequality
-                        eqop = -eqop;
-                    end
-                end
+            end
+            rDir = sign(rMin(div)+rMax(div));
+            if any(rDir.*cdiv' > 0) &&  any(rDir.*cdiv' < 0)
+                error(['reactions that are part of the divisor inside the '...
+                       'target constraints must all have the same direction '...
+                       '(positive or negative). Please check if coefficients and '...
+                       'reaction ranges lead to all positive or all negative variables.']);
+            end
+            if sign(sum(rDir.*cdiv')) == -1 % if the divisor is all negative
+                % change direction of inequality
+                eqop = -eqop;
             end
             cdiv = -a*cdiv; % transformation to following form:
             a = 0;
@@ -250,7 +254,7 @@ function [ridx,coeff] = findReacAndCoeff(eq,reacID)
     r = cell.empty(1,0);
     ridx = [];
     for strPart = strsplit(char(eq))
-        str = char(regexprep(strPart,'^(\W)*|(\W)*$','')); % remove leading and trainling digits and special characters
+        str = char(regexprep(strPart,'^(\W)*|(W)*$','')); % remove leading and tailing special characters
         if ~isempty(str)
             v = regexp(reacID, ['^' str '$'], 'match');
             if any(~cellfun(@isempty,v))
@@ -260,15 +264,17 @@ function [ridx,coeff] = findReacAndCoeff(eq,reacID)
         end
     end
     for k = 1:length(r)
-        c = regexp(eq, ['(\s|\d|-|\.)*?(?=' r{k} ')'], 'match');
-        c = strrep(char(c{:}),' ','');
+        c = regexp(eq, ['(-|\d*|\+)*?\s(?=' r{k} ')'], 'match');
+        c = regexprep(char(c{:}),'\s','');
         switch c
             case ''
+                coeff(k) = 1;
+            case '+'
                 coeff(k) = 1;
             case '-'
                 coeff(k) = -1;
             otherwise
-                coeff(k) = str2num(c);
+                coeff(k) = str2double(c);
         end
     end
 end

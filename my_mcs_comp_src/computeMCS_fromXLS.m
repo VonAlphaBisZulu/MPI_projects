@@ -37,9 +37,7 @@ check_mass_balance(cnap);
 [cnap, ~, genes, gpr_rules] = CNAgenerateGPRrules( cnap );
 
 %% 5. Load Cut-Set-Calculation parameters from xls
-[T, t, D, d,rkoCost,rkiCost,reacMin,reacMax,gkoCost,gkiCost,idx] = CNAgetgMCScalcParamXls( cnap, prod, subs, genes);
-cnap.reacMin = reacMin;
-cnap.reacMax = reacMax;
+[T, t, D, d,rkoCost,rkiCost,cnap,gkoCost,gkiCost,idx] = CNAgetgMCScalcParamXls( cnap, prod, subs, genes);
 
 cnap.mcs.T = T;
 cnap.mcs.t = t;
