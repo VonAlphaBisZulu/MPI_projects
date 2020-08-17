@@ -13,15 +13,21 @@ function startup_CNA_parpool()
     end
     if ~isempty(getenv('SLURM_JOB_ID')) && isempty(gcp('nocreate'))
         % start parpool and locate preferences-directory to tmp path
+        currdir = pwd;
+        cd(cnan.cnapath);
         prefdir = start_parallel_pool_on_SLURM_node();
+        cd(currdir);
     % If running on local machine, start parallel pool and keep compression
     % flags as defined above.
     %
     % On a local machine without a SLURM workload manager, but MATLAB parallel toolbox installed:
     elseif license('test','Distrib_Computing_Toolbox') && isempty(getCurrentTask()) && ...
            (~isempty(ver('parallel'))  || ~isempty(ver('distcomp'))) && isempty(gcp('nocreate'))
+        currdir = pwd;
+        cd(cnan.cnapath);
         parpool();
         wait(parfevalOnAll(@startcna,0,1)); % startcna on all workers
+        cd(currdir);
     end
     options.preproc_check_feas = false;
 end

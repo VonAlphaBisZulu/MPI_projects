@@ -1,4 +1,4 @@
-function [rmcs, cnap, gmcs, gcnap, cmp_gmcs, cmp_gcnap, mcs_idx_cmp_full, prod, subs] = computeMCS_fromXLS(cnap,prod_id,subs_id,filepath,max_solutions,max_num_interv,options);
+function [rmcs, cnap, gmcs, gcnap, cmp_gmcs, cmp_gcnap, gmcs_idx, prod, subs] = computeMCS_fromXLS(cnap,prod_id,subs_id,filepath,max_solutions,max_num_interv,options);
 
 %% 1. Identifying product and substrate files
 prod_id = num2str(prod_id,'%02i');
@@ -17,16 +17,22 @@ filename=['StrainBooster/my_mcs_results/' model_name '-gMCS-' prod_name '-' date
 disp(['Loading reactions and species from file: ' strjoin(prod,', ')]);
 try %% Add new reactions to model from product-xls (if any were defined)
     cnap = CNAaddSpecsAndReacsFromFile(cnap,prod{:});
-catch
-    cprintf([0.8 0.6 0.3],[char(prod) ': no reactions were added to model' newline]);
+catch err
+    warning('off','backtrace')
+    warning( getReport( err, 'extended', 'hyperlinks', 'on' ) );
+    warning([char(prod) ': no reactions were added to model']);
+    warning('on','backtrace')
 end
 
 for file = subs
     disp(['Loading additional substrate uptake pseudoreactions from file: ' (file{:})]);
     try %% Add new reactions to model from substrate-xls (if any were defined)
         cnap = CNAaddSpecsAndReacsFromFile(cnap,file{:});
-    catch
-        cprintf([0.8 0.6 0.3],[char(prod) ': no reactions were added to model' newline]);
+    catch err
+        warning('off','backtrace')
+        warning( getReport( err, 'extended', 'hyperlinks', 'on' ) );
+        warning([char(file) ': no reactions were added to model']);
+        warning('on','backtrace')
     end
 end
 
@@ -37,8 +43,10 @@ check_mass_balance(cnap);
 [cnap, ~, genes, gpr_rules] = CNAgenerateGPRrules( cnap );
 
 %% 5. Load Cut-Set-Calculation parameters from xls
-[T, t, D, d,rkoCost,rkiCost,cnap,gkoCost,gkiCost,idx] = CNAgetgMCScalcParamXls( cnap, prod, subs, genes);
+[T, t, D, d,rkoCost,rkiCost,reacMin,reacMax,gkoCost,gkiCost,idx] = CNAgetgMCScalcParamXls( cnap, prod, subs, genes);
 
+cnap.reacMin = reacMin;
+cnap.reacMax = reacMax;
 cnap.mcs.T = T;
 cnap.mcs.t = t;
 cnap.mcs.D = D;
@@ -63,7 +71,7 @@ idx.prodYieldFactor = T{:}(1,idx.prod);
 % disp(Y_thresh);
 
 %% 6. Compute MCS
-[rmcs, gmcs, gcnap, cmp_gmcs, cmp_gcnap, mcs_idx_cmp_full] = ...
+[rmcs, gmcs, gcnap, cmp_gmcs, cmp_gcnap, gmcs_idx] = ...
     CNAgeneMCSEnumerator2(cnap,T,t,D,d,rkoCost,rkiCost,max_solutions,max_num_interv,gkoCost,gkiCost,gpr_rules,options,1);
 
 cnap.mcs.rmcs = rmcs;
@@ -86,7 +94,7 @@ disp('some gene MCS:');
 disp(gko_text);
 
 gmcs = sparse(gmcs);
-save([filename '.mat'],'cnap', 'idx', 'rmcs', 'gmcs', 'gcnap', 'cmp_gmcs', 'cmp_gcnap', 'mcs_idx_cmp_full', 'gko_text', 'gpr_rules','-v7.3');
+save([filename '.mat'],'cnap', 'idx', 'rmcs', 'gmcs', 'gcnap', 'cmp_gmcs', 'cmp_gcnap', 'gmcs_idx', 'gko_text', 'gpr_rules','-v7.3');
 
 %% 7. Characterization and ranking of MCS
 % Instead of the gene-MCS, their corresponding reaction-representations are analyzed.

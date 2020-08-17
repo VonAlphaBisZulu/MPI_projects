@@ -377,11 +377,11 @@ global cnan;
     % Remove all text boxes that don't correspond to reactions that are
     % contained in the project
     if cnap.has_gui
+        % usually not necessary, but sometimes the generated map is not updated
+        % correctly if this function isn't called
         deleteInvalidTextBoxes(cnap);
-    % usually not necessary, but sometimes the generated map is not updated
-    % correctly if this function isn't called
-    %
-    % With less than 50 reaction on the generated map, also show reaction equation
+        %
+        % With less than 50 reaction on the generated map, also show reaction equation
         cnap = CNAgenerateMap(cnap,sum(cnap.reacBoxes(:,5) == -1) < 50,0);
     end
     
