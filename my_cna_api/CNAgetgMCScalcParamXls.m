@@ -264,7 +264,7 @@ function [ridx,coeff] = findReacAndCoeff(eq,reacID)
         end
     end
     for k = 1:length(r)
-        c = regexp(eq, ['(-|\d*|\+)*?\s(?=' r{k} ')'], 'match');
+        c = regexp(eq, ['(\s|\d|-|\.)*?(?=' r{k} ')'], 'match');
         c = regexprep(char(c{:}),'\s','');
         switch c
             case ''
