@@ -254,7 +254,7 @@ function [ridx,coeff] = findReacAndCoeff(eq,reacID)
     r = cell.empty(1,0);
     ridx = [];
     for strPart = strsplit(char(eq))
-        str = char(regexprep(strPart,'^(\W)*|(W)*$','')); % remove leading and tailing special characters
+        str = char(regexprep(strPart,'^(\s|\d|-|\.|\()*|(\s|\d|-|\.|\))*$','')); % remove leading and tailing special characters
         if ~isempty(str)
             v = regexp(reacID, ['^' str '$'], 'match');
             if any(~cellfun(@isempty,v))
