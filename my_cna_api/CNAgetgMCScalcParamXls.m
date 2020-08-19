@@ -1,6 +1,8 @@
 function [T, t, D, d,rkoCost,rkiCost,reacMin,reacMax,gkoCost,gkiCost,idx] = CNAgetgMCScalcParamXls( cnap, xls_prod_filename, xls_subs_filename, genes)
 if ~exist('genes','var')
     genes = [];
+    gkoCost = [];
+    gkiCost = [];
 end
 
 reacMin = cnap.reacMin;

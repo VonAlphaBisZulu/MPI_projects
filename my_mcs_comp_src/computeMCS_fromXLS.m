@@ -1,4 +1,4 @@
-function [rmcs, cnap, gmcs, gcnap, cmp_gmcs, cmp_gcnap, gmcs_idx, prod, subs] = computeMCS_fromXLS(cnap,prod_id,subs_id,filepath,max_solutions,max_num_interv,options);
+function [rmcs, cnap, gmcs, gcnap, cmp_gmcs, cmp_gcnap, gmcs_idx, prod, subs] = computeMCS_fromXLS(cnap,prod_id,subs_id,filepath,max_solutions,max_num_interv,options)
 
 %% 1. Identifying product and substrate files
 prod_id = num2str(prod_id,'%02i');
@@ -152,7 +152,12 @@ if full(~all(all(isnan(gmcs)))) % if mcs have been found
         end
     end
     cell2csv([filename '-gmcs.tsv'],text_gmcs,char(9));
-    save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','-append');
+    save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','rmcs','gmcs_rmcs_map','-append');
+    if ~isempty(getenv('SLURM_JOB_ID'))
+        system(['~/bin/sshpass -f ~/.kdas scp ' [filename '-gmcs.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020']);
+        system(['~/bin/sshpass -f ~/.kdas scp ' [filename '.mat'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020']);
+        system(['~/bin/sshpass -f ~/.kdas scp ' [filename '.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020']);
+    end
 end
 end
 
