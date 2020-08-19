@@ -154,9 +154,9 @@ if full(~all(all(isnan(gmcs)))) % if mcs have been found
     cell2csv([filename '-gmcs.tsv'],text_gmcs,char(9));
     save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','rmcs','gmcs_rmcs_map','-append');
     if ~isempty(getenv('SLURM_JOB_ID'))
-        system(['~/bin/sshpass -f ~/.kdas scp ' [filename '-gmcs.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020']);
-        system(['~/bin/sshpass -f ~/.kdas scp ' [filename '.mat'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020']);
-        system(['~/bin/sshpass -f ~/.kdas scp ' [filename '.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020']);
+        system(['~/bin/sshpass -f ~/.kdas scp ' [filename '-gmcs.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
+        system(['~/bin/sshpass -f ~/.kdas scp ' [filename '.mat'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
+        system(['~/bin/sshpass -f ~/.kdas scp ' [filename '.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
     end
 end
 end
