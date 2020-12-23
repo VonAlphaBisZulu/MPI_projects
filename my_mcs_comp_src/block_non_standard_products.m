@@ -10,7 +10,12 @@ function cnap = block_non_standard_products(cnap)
     % find exchange reactions (reactions that have only one enry, and that entry is -1)
     ex_reacs = find(sum((sum(abs(cnap.stoichMat))==1).*(cnap.stoichMat==-1)));
     % find carbon containing species and trace their exchange reactions
-    specsWithCarbon = regexp(cellstr(cnap.specNotes), '\[.*C([A-Z]|\d).*]', 'match');
+    if ismember('fbc_chemicalFormula',CNAgetKeywordsGenericSpeciesData(cnap))
+        formulas = CNAgetGenericSpeciesData_as_array(cnap,'fbc_chemicalFormula');
+        specsWithCarbon = regexp(formulas, '.*C([A-Z]|\d).*', 'match');
+    else
+        specsWithCarbon = regexp(cellstr(cnap.specNotes), '\[.*C([A-Z]|\d).*]', 'match');
+    end
     specsWithCarbon = find(~cellfun(@isempty,specsWithCarbon));
     reacsWCarbon  = cellstr(cnap.reacID(ex_reacs( ismember(ex_reacs,find(sum(cnap.stoichMat(specsWithCarbon,:))))),:));
 
@@ -23,7 +28,7 @@ function cnap = block_non_standard_products(cnap)
     cnap.reacMax(ex_reacs) = 0;
     % Open up selected carbon sinks again
     cnap.reacMax(~cellfun(@isempty,(regexp(cellstr(cnap.reacID),'BIOMASS_.*_core_.*')))) = 1000;
-    cnap.reacMax(~cellfun(@isempty,(regexp(cellstr(cnap.reacID),'BIOMASS_.*_WT_.*')))) = 1000;
+    cnap.reacMax(~cellfun(@isempty,(regexp(cellstr(cnap.reacID),'BIOMASS_.*_WT_.*')))) = 0;
     cnap.reacMax(ismember(cnap.reacID,{     'EX_ac_e'...
                                             'EX_co2_e'...
                                             'EX_etoh_e'...
