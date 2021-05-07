@@ -125,6 +125,7 @@ load(which('iML1515geneNames.mat'));
 cnap = CNAcobra2cna(iML1515,0);
 cnap = block_non_standard_products(cnap);
 cnap.reacMin(ismember(cnap.reacID,{'EX_glc__D_e'})) = -10;
+load(which('core.mat'));
 
 % % Uncomment this for computation in core network
 % load(which('core.mat'));
