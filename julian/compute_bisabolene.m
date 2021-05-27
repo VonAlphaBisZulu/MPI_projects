@@ -52,7 +52,7 @@ idx.subsYieldFactor = -6;
 idx.prodYieldFactor = 15;
 
 % select number and time limit for computations
-num_iter = 4; % 12 computations
+num_iter = 1; % 12 computations
 options.milp_time_limit = 7200; % 2h
 
 % choose whether a new instance of MATLAB should be started for each MCS computation.
