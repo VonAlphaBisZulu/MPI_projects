@@ -22,7 +22,7 @@ try
     load(filename,'gene_mcs','cnap','modules','rkoCost','maxSolutions','maxCost','gkoCost','options','verbose');
     tic;
     if gene_mcs  %#ok<*UNRCH>
-        [rmcs, gmcs, ~, ~, ~, ~, status] = ...
+        [rmcs, gmcs, full_cnap, ~, ~, ~, status] = ...
             CNAgeneMCSEnumerator3(cnap,modules,...
                 rkoCost,[],...
                 maxSolutions,maxCost,...
@@ -34,9 +34,10 @@ try
                 maxSolutions,maxCost,...
                 options,verbose);
           gmcs = [];
+          full_cnap = [];
     end
     comptime = toc;
-    save(filename,'gmcs','rmcs','comptime','status');
+    save(filename,'gmcs','rmcs','comptime','status','full_cnap');
 catch err
     warning('off','backtrace')
     warning( getReport( err, 'extended', 'hyperlinks', 'on' ) ); % getReport not yet implemented in octave
