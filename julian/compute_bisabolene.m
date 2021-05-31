@@ -665,7 +665,15 @@ function [rmcs, gmcs, comptime, full_cnap] = MCS_enum_thread(gene_mcs,cnap,modul
         if status ~= 0
             comptime = nan;
         end
-        rmdir(wdir,'s');
+        try
+            rmdir(wdir,'s');
+        catch
+            if ~exist(wdir,'dir')
+                warning([wdir ' could not be found.']);
+            else
+                warning([wdir ' could be found but not deleted']);
+            end
+        end
 end
 
 function indices = findStrPos( str , pattern , opts )
