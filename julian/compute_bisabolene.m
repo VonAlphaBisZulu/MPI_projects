@@ -402,7 +402,7 @@ if full(~all(all(isnan(gmcs_tot)))) % if mcs have been found
         text_gmcs(i,1:numel(mcs_tx)) = mcs_tx;
     end
     cell2csv([filename '-gmcs.tsv'],text_gmcs,char(9));
-    save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','rmcs','gmcs_rmcs_map');
+    save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','full_cnap','gmcs_tot','rmcs_tot','gmcs_rmcs_map');
     if ~isempty(getenv('SLURM_JOB_ID'))
         system(['~/bin/sshpass -f ~/.kdas scp ' [filename '-gmcs.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
         system(['~/bin/sshpass -f ~/.kdas scp ' [filename '.mat'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
