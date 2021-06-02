@@ -7,6 +7,7 @@ cnap = CNAcobra2cna(iML1515,0);
 clear iML1515;
 % load CNA network
 CNAloadNetwork({'network_dirs/iML1515';1});
+netmap = findStrPos(cellstr(iML1515.reacID),cellstr(cnap.reacID));
 load(which('iML1515geneNames.mat'));
 iML1515 = block_non_standard_products(iML1515);
 iML1515.reacMin(ismember(iML1515.reacID,{'EX_glc__D_e'})) = -10;
@@ -27,4 +28,6 @@ end
 iML1515.reacBoxes(iML1515.reacBoxes(:,5) == 0,5) = -1;
 iML1515 = CNAgenerateMap(iML1515,1,0);
 load(which('EX_bsb_e.mat'));
+% switch rows for correct network mapping
+rmcs(netmap,:) = rmcs(1:numel(netmap),:);
 CNAloadMCSinGUI(iML1515,rmcs);
