@@ -52,7 +52,9 @@ idx.subsYieldFactor = -6;
 idx.prodYieldFactor = 15;
 
 % select number and time limit for computations
-num_iter = 1; % 12 computations
+if ~exist('num_iter','var')
+    num_iter = 4; % 16 computations
+end
 options.milp_time_limit = 7200; % 2h
 
 % choose whether a new instance of MATLAB should be started for each MCS computation.
@@ -665,7 +667,15 @@ function [rmcs, gmcs, comptime, full_cnap] = MCS_enum_thread(gene_mcs,cnap,modul
         if status ~= 0
             comptime = nan;
         end
-        rmdir(wdir,'s');
+        try
+            rmdir(wdir,'s');
+        catch
+            if ~exist(wdir,'dir')
+                warning([wdir ' could not be found.']);
+            else
+                warning([wdir ' could be found but not deleted']);
+            end
+        end
 end
 
 function indices = findStrPos( str , pattern , opts )
