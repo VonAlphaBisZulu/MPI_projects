@@ -328,29 +328,29 @@ global cnan;
 
     % add Species
     n = 1;  % index only needed for error output
-    try
-        for spec = species
+    for spec = species
+        try
             n = find(strcmp(strtrim([species.spec_id]'),spec.spec_id));
             cnap = CNAaddSpeciesMFN(cnap,spec);
             cnap = CNAsetGenericSpeciesData(cnap,cnap.nums,'fbc_chemicalFormula',char(spec.fbc_chemicalFormula),'fbc_charge',double(spec.fbc_charge));
+        catch ME
+            % species already exists in model
+            if length(n) ~= 1
+                error('you defined multiple species with the same ID, make sure every ID appears only once.')            
+            elseif any(strcmp(cellstr(cnap.specID),char(species(n).spec_id)))
+                warning(['The species id "',char(species(n).spec_id),'" already occurs in the model.',char(10),ME.identifier,': ',ME.message]);
+                % species cannot be added for other reasons
+            else
+                error(['The species id "',char(species(n).spec_id),'" could not be added to the model.',char(10),ME.identifier,': ',ME.message]);
+            end
+            % rethrow(ME);
         end
-    catch ME
-        % species already exists in model
-        if length(n) ~= 1
-            error('you defined multiple species with the same ID, make sure every ID appears only once.')            
-        elseif any(strcmp(cellstr(cnap.specID),char(species(n).spec_id)))
-            warning(['The species id "',char(species(n).spec_id),'" already occurs in the model.',char(10),ME.identifier,': ',ME.message]);
-            % species cannot be added for other reasons
-        else
-            error(['The species id "',char(species(n).spec_id),'" could not be added to the model.',char(10),ME.identifier,': ',ME.message]);
-        end
-        % rethrow(ME);
     end
 
     % add Reactions
     n = 0;  % index only needed for error output
-    try
-        for reac = reactions
+    for reac = reactions
+        try
             n = find(strcmp(strtrim({reactions.reac}'),reac.reac));
             if ~any(ismember(cellstr(cnap.reacID),reac.reac))
                 cnap = CNAaddReactionMFN(cnap,reac);
@@ -362,16 +362,15 @@ global cnan;
             else
                 error(['reaction ' reac.reac ' already exists in model. Please mark reaction in xls as ''change_bounds_only''']);
             end
+        catch ME
+            % reaction already exists in model
+            if any(strcmp(cnap.reacID,char(reactions(n).reac)))
+                error(['The reaction id "',char(reactions(n).reac),'" already occurs in the model.',char(10),ME.identifier,': ',ME.message]);
+                % reaction cannot be added for other reasons
+            else
+                error(['The reaction id "',char(reactions(n).reac),'" could not be added to the model.',char(10),ME.identifier,': ',ME.message]);
+            end
         end
-    catch ME
-        % reaction already exists in model
-        if any(strcmp(cnap.reacID,char(reactions(n).reac)))
-            error(['The reaction id "',char(reactions(n).reac),'" already occurs in the model.',char(10),ME.identifier,': ',ME.message]);
-            % reaction cannot be added for other reasons
-        else
-            error(['The reaction id "',char(reactions(n).reac),'" could not be added to the model.',char(10),ME.identifier,': ',ME.message]);
-        end
-
         % error(['Please make sure the reaction ids you defined, dont already occur in the model. No changes have been made to the project.',char(10),ME.identifier,': ',ME.message]);
     end
     % Remove all text boxes that don't correspond to reactions that are
