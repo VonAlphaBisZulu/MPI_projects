@@ -198,6 +198,13 @@ else
     rmap = eye(cnap.numr);
 end
 
+if isfield(full_cnap,'rType')
+    intvCost = rmap'*rkoCost;
+    intvCost(full_cnap.rType=='g') = gkoCost;
+else
+    intvCost = koCost;
+end
+
 %% 2) Define MCS setup
 substrate_rID = 'EX_glc__D_e';
 biomass_rID   = 'BIOMASS_Ec_iML1515_core_75p37M';
@@ -384,9 +391,6 @@ if full(~all(all(isnan(gmcs_tot)))) % if mcs have been found
     lbCore(~reac_in_core_metabolism) = 0;
     ubCore(~reac_in_core_metabolism) = 0;
   % 5.4) Costs for genetic interventions  [criterion 10]
-    intvCost                  = full_cnap.mcs.kiCost;
-    intvCost(isnan(intvCost)) = full_cnap.mcs.koCost(isnan(intvCost));
-    intvCost(full_cnap.rType == 'g') = 1;
     gene_and_reac_names = cellstr(full_cnap.reacID);
     gene_and_reac_names(full_cnap.rType == 'g') = cellstr(full_cnap.reacID((full_cnap.rType == 'g'),4:end)); % to avoid the 'GR-' prefix
     gene_and_reac_names(full_cnap.rType == 'g') = strrep(strrep(gene_and_reac_names(full_cnap.rType == 'g'),'(',''),')',''); % remove brackets
