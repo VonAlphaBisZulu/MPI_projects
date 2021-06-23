@@ -62,7 +62,7 @@ options.milp_time_limit = 7200; % 2h
 solve_in_new_process = 0;
 
 options.mcs_search_mode = 1; % find any MCS
-maxSolutions = 5;
+maxSolutions = 30;
 maxCost = 25;
 verbose = 1;
 atpm = 1;
@@ -203,7 +203,9 @@ else
 end
 
 if isfield(full_cnap,'rType')
-    intvCost = rmap'*rkoCost;
+    intvCost = nan(full_cnap.numr,1);
+    [r,c] = find(rmap);
+    intvCost(c) = rkoCost(r);
     intvCost(full_cnap.rType=='g') = gkoCost;
 else
     intvCost = koCost;
@@ -368,7 +370,7 @@ if full(~all(all(isnan(gmcs_tot)))) % if mcs have been found
         MCS_mut_ub{i} = MCS_mut_ub{i}.*(rmcs_tot(:,i)==1 | rmcs_tot(:,i)==0);
         MCS_mut_ub{i}(isnan(MCS_mut_ub{i})) = 0;
     end
-  % 5.2) Set relevant indices [criterion 2-7] and prepare thermodynamic (MDF) parameters [criterion 9]
+  % 5.2) Set relevant indices [criterion 2-9] and prepare thermodynamic (MDF) parameters [criterion 9]
     % reaction indices
     T = readcell(which('thermo_iML1515_ph7.50.csv'));
     for i = 1:numel(T)
@@ -390,7 +392,7 @@ if full(~all(all(isnan(gmcs_tot)))) % if mcs have been found
     
     [idx,mdfParam] = relev_indc_and_mdf_Param(cnap,idx);
 
-  % 5.3) Define core metabolism [criterion 8]
+  % 5.3) Define core metabolism [criterion 12]
     % Add the new reactions also to the list of reactions that will be
     % considered "core" reactions in the final MCS characterization and ranking
     new_reacs = ismember(cellstr(cnap.reacID),{reactions.reac_id});
@@ -400,16 +402,25 @@ if full(~all(all(isnan(gmcs_tot)))) % if mcs have been found
     ubCore = cnap.reacMax;
     lbCore(~reac_in_core_metabolism) = 0;
     ubCore(~reac_in_core_metabolism) = 0;
-  % 5.4) Costs for genetic interventions  [criterion 10]
+  % 5.4) Costs for genetic interventions  [criterion 11]
     gene_and_reac_names = cellstr(full_cnap.reacID);
     gene_and_reac_names(full_cnap.rType == 'g') = cellstr(full_cnap.reacID((full_cnap.rType == 'g'),4:end)); % to avoid the 'GR-' prefix
     gene_and_reac_names(full_cnap.rType == 'g') = strrep(strrep(gene_and_reac_names(full_cnap.rType == 'g'),'(',''),')',''); % remove brackets
+    ranking_factors = zeros(1,12);
+    ranking_factors(1) = 3; % 1) number of interventions
+    ranking_factors(2) = 5; % 2) max growth rate
+    ranking_factors(3) = 2; % 3) growth coupling potential
+    ranking_factors(4) = 1; % 4) minimum Yield at maximum growth rate
+    ranking_factors(5) = 3; % 5) maximum Yield at maximum growth rate
+    ranking_factors(6) = 1; % 6) minimum Yield
+    ranking_factors(10) = 1; % 10) optMDF
+    ranking_factors(11) = 1; % 11) overlap score
   % 5.5) Start characterization and ranking
     [MCS_rankingStruct, MCS_rankingTable]...
         = CNAcharacterizeGeneMCS( cnap , MCS_mut_lb, MCS_mut_ub, 1:size(MCS_mut_lb,2),... model, mutants LB,UB, incices ranked mcs
         idx, idx.cytMet, modules, mdfParam, ... relevant indices, Desired and Target regions
         lbCore, ubCore, gmcs_tot, intvCost, gene_and_reac_names, gmcs_rmcs_map, ...
-        0:11, ones(1,11),2); % assessed criteria and weighting factors
+        0:12, ranking_factors,2); % assessed criteria and weighting factors
     % save ranking and textual gmcs as tab-separated-values
     cell2csv([filename '.tsv'],MCS_rankingTable,char(9));
     text_gmcs = cell(size(gmcs_tot,2),1);
@@ -418,7 +429,7 @@ if full(~all(all(isnan(gmcs_tot)))) % if mcs have been found
         text_gmcs(i,1:numel(mcs_tx)) = mcs_tx;
     end
     cell2csv([filename '-gmcs.tsv'],text_gmcs,char(9));
-    save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','full_cnap','gmcs_tot','rmcs_tot','gmcs_rmcs_map');
+    save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','full_cnap','cnap','gmcs_tot','rmcs_tot','gmcs_rmcs_map');
     if ~isempty(getenv('SLURM_JOB_ID'))
         system(['~/bin/sshpass -f ~/.kdas scp ' [filename '-gmcs.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
         system(['~/bin/sshpass -f ~/.kdas scp ' [filename '.mat'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
