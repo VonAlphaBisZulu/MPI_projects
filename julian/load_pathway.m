@@ -159,8 +159,8 @@ function [prod_id,species,reactions] = load_pathway(product)
 			reactions(8) = struct('reac_id','BSBtpp','equation','1 bsb_c = 1 bsb_p','lb',-1000,'ub',1000,'fbc_geneProductAssociation','');
 			reactions(9) = struct('reac_id','BSBtex','equation','1 bsb_p = 1 bsb_e','lb',-1000,'ub',1000,'fbc_geneProductAssociation','');
 			reactions(10) = struct('reac_id','EX_bsb_e','equation','1 bsb_e =','lb',0,'ub',1000,'fbc_geneProductAssociation','');
-			reactions(11) = struct('reac_id','XPK','equation','1 xu5p__D_c + 1 pi_c = 1 actp_c + 1 g3p_c + 1 h2o_c','lb',0,'ub',1000,'fbc_geneProductAssociation','fxpk');
-			reactions(12) = struct('reac_id','FPK','equation','1 f6p_c + 1 pi_c = 1 actp_c + 1 e4p_c + 1 h2o_c','lb',0,'ub',1000,'fbc_geneProductAssociation','fxpk');
+% 			reactions(11) = struct('reac_id','XPK','equation','1 xu5p__D_c + 1 pi_c = 1 actp_c + 1 g3p_c + 1 h2o_c','lb',0,'ub',1000,'fbc_geneProductAssociation','fxpk');
+% 			reactions(12) = struct('reac_id','FPK','equation','1 f6p_c + 1 pi_c = 1 actp_c + 1 e4p_c + 1 h2o_c','lb',0,'ub',1000,'fbc_geneProductAssociation','fxpk');
         case  13 % tryptophane
 			prod_id      = 'EX2_trp__L_e';
 			species      = [];
