@@ -29,5 +29,5 @@ iML1515.reacBoxes(iML1515.reacBoxes(:,5) == 0,5) = -1;
 iML1515 = CNAgenerateMap(iML1515,1,0);
 load(which('EX_bsb_e.mat'));
 % switch rows for correct network mapping
-rmcs(netmap,:) = rmcs(1:numel(netmap),:);
-CNAloadMCSinGUI(iML1515,rmcs);
+rmcs_tot(netmap,:) = rmcs_tot(1:numel(netmap),:);
+CNAloadMCSinGUI(iML1515,rmcs_tot);

@@ -53,7 +53,7 @@ idx.prodYieldFactor = 15;
 
 % select number and time limit for computations
 if ~exist('num_iter','var')
-    num_iter = 4; % 16 computations
+    num_iter = 2; % 16 computations
 end
 options.milp_time_limit = 7200; % 2h
 
@@ -62,7 +62,7 @@ options.milp_time_limit = 7200; % 2h
 solve_in_new_process = 1;
 
 options.mcs_search_mode = 1; % find any MCS
-maxSolutions = 5;
+maxSolutions = 30;
 maxCost = 25;
 verbose = 1;
 atpm = 1;
@@ -130,10 +130,10 @@ cnap.reacMin(ismember(cnap.reacID,{'EX_glc__D_e'})) = -10;
 load(which('core.mat'));
 
 % % Uncomment this for computation in core network
-% load(which('core.mat'));
-% % Reduce model to core network
-% cnap = CNAdeleteReaction(cnap,find(~ismember(cellstr(cnap.reacID),core_reacs)));
-% cnap = CNAdeleteSpecies(cnap,find(~ismember(cellstr(cnap.specID),core_specs)),0);
+load(which('core.mat'));
+% Reduce model to core network
+cnap = CNAdeleteReaction(cnap,find(~ismember(cellstr(cnap.reacID),core_reacs)));
+cnap = CNAdeleteSpecies(cnap,find(~ismember(cellstr(cnap.specID),core_specs)),0);
 
 % replace gene numbers with names
 for i = 1:length(ecoliGeneNames)
@@ -181,9 +181,12 @@ if gene_mcs
     % All genes are knockable apart from pseudo-gene that marks spontanous reactions
     gkoCost = ones(length(genes),1);
     gkoCost(ismember(genes,'spontanous')) = nan;
-    % Reactions are not knockable apart from O2 supply
+    gkiCost = nan(length(genes),1);
+    gkiCost(ismember(genes,'mep')) = 1;
+    rkiCost = nan(cnap.numr,1);
+    % Reactions are not knockable % apart from O2 supply
     rkoCost = nan(cnap.numr,1);
-    rkoCost(strcmp(cellstr(cnap.reacID),'EX_o2_e')) = 1;
+%     rkoCost(strcmp(cellstr(cnap.reacID),'EX_o2_e')) = 1;
     [full_cnap, rmap] = CNAintegrateGPRrules(cnap);
 else
     % For reaction MCS
@@ -193,16 +196,22 @@ else
     notknock_gene = ~cellfun(@isempty,regexp(gpr,'(spontanous|phoE|ompF|ompN|ompC)','match'));
 %     notknock_gene = ~cellfun(@isempty,regexp(gpr,'(spontanous|phoE|ompF|ompN|ompC|sufA|sufB|sufC|sufD|sufE|sufS)','match')); % maybe also iscA|iscS|iscU
     koCost(koCost==0 | notknock_gene) = nan;
+    kiCost = nan(cnap.numr,1);
     koCost(strcmp(cellstr(cnap.reacID),'EX_o2_e')) = 1;
     full_cnap = cnap;
     rmap = eye(cnap.numr);
 end
 
 if isfield(full_cnap,'rType')
-    intvCost = rmap'*rkoCost;
-    intvCost(full_cnap.rType=='g') = gkoCost;
+    intvCost = rkiCost;
+    intvCost(isnan(rkiCost)) = rkoCost(isnan(rkiCost));
+    intvgCost = gkiCost;
+    intvgCost(isnan(gkiCost)) = gkoCost(isnan(gkiCost));
+    intvCost = rmap'*intvCost;
+    intvCost(full_cnap.rType=='g') = intvgCost;
 else
-    intvCost = koCost;
+    intvCost = kiCost;
+    intvCost(isnan(kiCost)) = koCost(isnan(kiCost));
 end
 
 %% 2) Define MCS setup
@@ -292,15 +301,15 @@ for coupling = {'potential growth-coupling' 'weak growth-coupling' 'directional 
             displ(['Running MCS computation in separate thread: ' num2str(i) '/' num2str(num_iter)],verbose);
             if gene_mcs  %#ok<*UNRCH>
                [rmcs, gmcs, comptime(i), full_cnap] = MCS_enum_thread(gene_mcs,cnap,modules,...
-                                                rkoCost,...
+                                                rkoCost,rkiCost,...
                                                 maxSolutions,maxCost,...
-                                                gkoCost,...
+                                                gkoCost, gkiCost,...
                                                 options,verbose);
             else
                 [rmcs, ~, comptime(i)] = MCS_enum_thread(gene_mcs,cnap,  modules,...
-                                                koCost,...
+                                                koCost,kiCost,...
                                                 maxSolutions,maxCost,...
-                                                [],...
+                                                [],[],...
                                                 options,verbose);
             end
         else
@@ -309,13 +318,13 @@ for coupling = {'potential growth-coupling' 'weak growth-coupling' 'directional 
             if gene_mcs  %#ok<*UNRCH>
                 [rmcs, gmcs, full_cnap] = ...
                     CNAgeneMCSEnumerator3(cnap,modules,...
-                        rkoCost,[],...
+                        rkoCost,rkiCost,...
                         maxSolutions,maxCost,...
-                        gkoCost,[],[],...
+                        gkoCost,gkiCost,[],...
                         options,verbose);
             else
                  [gmcs, status] = CNAMCSEnumerator3(cnap,modules,...
-                        koCost,[],...
+                        koCost,kiCost,...
                         maxSolutions,maxCost,...
                         options,verbose);
             end
@@ -646,9 +655,9 @@ end
 end
 
 function [rmcs, gmcs, comptime, full_cnap] = MCS_enum_thread(gene_mcs,cnap,modules,...
-                                            rkoCost,...
+                                            rkoCost,rkiCost,...
                                             maxSolutions,maxCost,...
-                                            gkoCost,...
+                                            gkoCost, gkiCost,...
                                             options,verbose)
         % start MCS Enumeration in separate MATLAB instance
         if ~isempty(getenv('SLURM_TEMP'))
@@ -660,7 +669,7 @@ function [rmcs, gmcs, comptime, full_cnap] = MCS_enum_thread(gene_mcs,cnap,modul
         wdir = [tempdir num2str(randi([0,1e6-1])) filesep];
         mkdir(wdir);
         filename = [wdir 'ws_' num2str(randi([0,1e6-1])) '.mat'];
-        save(filename,'gene_mcs','cnap','modules','rkoCost','maxSolutions','maxCost','gkoCost','options','verbose');
+        save(filename,'gene_mcs','cnap','modules','rkoCost','rkiCost','maxSolutions','maxCost','gkoCost','gkiCost','options','verbose');
         wd = pwd;
         cd(evalin('base','cnan.cnapath'));
         system(['matlab -nosplash -nodesktop -r "addpath(''' genpath(fileparts(mfilename('fullpath'))) ''');' ... % add project path

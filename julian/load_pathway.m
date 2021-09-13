@@ -178,8 +178,8 @@ function [prod_id,species,reactions] = load_pathway(product)
 			reactions(4) = struct('reac_id','OCACtpp','equation','1 ocac_c = 1 ocac_p','lb',0,'ub',1000,'fbc_geneProductAssociation','');
 			reactions(5) = struct('reac_id','OCACtex','equation','1 ocac_p = 1 ocac_e','lb',0,'ub',1000,'fbc_geneProductAssociation','');
 			reactions(6) = struct('reac_id','EX_ocac_e','equation','1 ocac_e =','lb',0,'ub',1000,'fbc_geneProductAssociation','');
-			reactions(7) = struct('reac_id','XPK','equation','1 xu5p__D_c + 1 pi_c = 1 actp_c + 1 g3p_c + 1 h2o_c','lb',0,'ub',1000,'fbc_geneProductAssociation','fxpk');
-			reactions(8) = struct('reac_id','FPK','equation','1 f6p_c + 1 pi_c = 1 actp_c + 1 e4p_c + 1 h2o_c','lb',0,'ub',1000,'fbc_geneProductAssociation','fxpk');
+% 			reactions(7) = struct('reac_id','XPK','equation','1 xu5p__D_c + 1 pi_c = 1 actp_c + 1 g3p_c + 1 h2o_c','lb',0,'ub',1000,'fbc_geneProductAssociation','fxpk');
+% 			reactions(8) = struct('reac_id','FPK','equation','1 f6p_c + 1 pi_c = 1 actp_c + 1 e4p_c + 1 h2o_c','lb',0,'ub',1000,'fbc_geneProductAssociation','fxpk');
         case 15 % 4-hydroxycoumarin
 			prod_id      = 'EX_4hc_e';
 			species(1)   = struct('spec_id','salc_c','spec_name','salicylate','fbc_chemicalFormula','C7H5O3','fbc_charge',-1);
