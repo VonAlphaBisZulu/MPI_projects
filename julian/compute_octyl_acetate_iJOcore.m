@@ -53,7 +53,7 @@ idx.prodYieldFactor = 10;
 
 % select number and time limit for computations
 if ~exist('num_iter','var')
-    num_iter = 3; % 16 computations
+    num_iter = 4; % 16 computations
 end
 options.milp_time_limit = 7200; % 2h
 
@@ -314,7 +314,7 @@ Y_PS  = r_p_20/-fv(ismember(cnap.reacID,{substrate_rID}));
 comptime = nan(4*num_iter,1);
 gmcs_tot = nan(full_cnap.numr,0);
 rmcs_tot = nan(cnap.numr,0);
-for coupling = {'potential growth-coupling' 'weak growth-coupling' 'directional growth-coupling' 'substrate uptake coupling'}
+for coupl = coupling
 
     clear('modules');
     % Desired fluxes for all coupling cases: growth >= 0.05/h
@@ -324,9 +324,9 @@ for coupling = {'potential growth-coupling' 'weak growth-coupling' 'directional 
 
     disp(' ');
     disp('=============');
-    disp(coupling{:});
+    disp(coupl{:});
     disp('=============');
-    switch coupling{:}
+    switch coupl{:}
         case 'potential growth-coupling'
             modules{1}.type  = 'bilev_w_constr';
             % Desired flux states with maximal growth and positive ethanol production
@@ -464,7 +464,7 @@ if full(~all(all(isnan(gmcs_tot)))) % if mcs have been found
         = CNAcharacterizeGeneMCS( cnap , MCS_mut_lb, MCS_mut_ub, 1:size(MCS_mut_lb,2),... model, mutants LB,UB, incices ranked mcs
         idx, idx.cytMet, modules, mdfParam, ... relevant indices, Desired and Target regions
         lbCore, ubCore, gmcs_tot, intvCost, gene_and_reac_names, gmcs_rmcs_map, ...
-        0:11, ones(1,11),2); % assessed criteria and weighting factors
+        [0:9 11], ones(1,10),2); % assessed criteria and weighting factors
     % save ranking and textual gmcs as tab-separated-values
     cell2csv([filename '.tsv'],MCS_rankingTable,char(9));
     text_gmcs = cell(size(gmcs_tot,2),1);
@@ -473,12 +473,40 @@ if full(~all(all(isnan(gmcs_tot)))) % if mcs have been found
         text_gmcs(i,1:numel(mcs_tx)) = mcs_tx;
     end
     cell2csv([filename '-gmcs.tsv'],text_gmcs,char(9));
-    save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','full_cnap','gmcs_tot','rmcs_tot','gmcs_rmcs_map');
+    save([filename '.mat'],'MCS_rankingStruct','MCS_rankingTable','cnap','full_cnap','gmcs_tot','rmcs_tot','gmcs_rmcs_map');
     if ~isempty(getenv('SLURM_JOB_ID'))
         system(['~/bin/sshpass -f ~/.kdas scp ' [filename '-gmcs.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
         system(['~/bin/sshpass -f ~/.kdas scp ' [filename '.mat'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
         system(['~/bin/sshpass -f ~/.kdas scp ' [filename '.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
     end
+end
+% Determine limits for Phase plane
+for i = 1:size(rmcs_tot,2)
+    kos = find(rmcs_tot(:,i)==-1 | isnan(rmcs_tot(:,i)));
+    A_ineq = sparse(1:2*numel(kos),[kos' kos'],[ones(1,numel(kos)) -ones(1,numel(kos))],2*numel(kos),cnap.numr);
+    b_ineq = zeros(2*numel(kos),1);
+    cnap.objFunc(:) = 0;
+    cnap.objFunc(idx.bm) = -1;
+    fv = CNAoptimizeFlux(cnap,[],[],-1,0,0,A_ineq,b_ineq);
+    max_bm(i) = fv(idx.bm);
+    cnap.objFunc(:) = 0;
+    cnap.objFunc(idx.prod) = -1;
+    fv = CNAoptimizeFlux(cnap,[],[],-1,0,0,A_ineq,b_ineq);
+    max_p(i) = fv(idx.prod);
+end
+max_bm = max(max_bm)*1.1;
+max_p  = max(max_p)*1.1;
+% Plot phase planes
+for i = 1:size(rmcs_tot,2)
+    kos = find(rmcs_tot(:,i)==-1 | isnan(rmcs_tot(:,i)));
+    A_ineq = sparse(1:2*numel(kos),[kos' kos'],[ones(1,numel(kos)) -ones(1,numel(kos))],2*numel(kos),cnap.numr);
+    b_ineq = zeros(2*numel(kos),1);
+    [~,~,~,f] = CNAplotPhasePlane(cnap,[idx.bm idx.prod],[],[],3,20,A_ineq,b_ineq,'off');
+    xlim([0 max_bm]);
+    ylim([0 max_p]);
+    title(['MCS ' num2str(i,'%03d')]);
+    saveas(f,[filename '_MCS_' num2str(i,'%03d')],'emf')
+    delete(f);
 end
 disp('Finished.');
 

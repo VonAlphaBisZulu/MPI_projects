@@ -59,7 +59,7 @@ options.milp_time_limit = 7200; % 2h
 
 % choose whether a new instance of MATLAB should be started for each MCS computation.
 % This measure ensures memory cleanup between the MCS runs. (usually not needed with Windows)
-solve_in_new_process = 1;
+solve_in_new_process = 0;
 
 options.mcs_search_mode = 1; % find any MCS
 maxSolutions = 30;
