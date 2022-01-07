@@ -133,6 +133,7 @@ cnap.reacMin(ismember(cnap.reacID,{'POR5'})) = 0;
 % [minFlux,maxFlux] = CNAfluxVariability(cnap,[],[],-1,1:cnap.numr,A_ieq,b_ieq,0);
 core_reacs = [core_reacs;{'NADH18pp'}]; % also conserve NADH18pp
 core_reacs = [core_reacs; cellstr(cnap.reacID(~cellfun(@isempty,regexp(gpr_gs,'fab','match')),:))]; % keep fatty acid synthesis
+% load(which('iML_core.mat')); % iML1515core
 cnap = CNAdeleteReaction(cnap,find(~ismember(cellstr(cnap.reacID),core_reacs)));
 cnap = CNAdeleteSpecies(cnap,find(~any(cnap.stoichMat,2)),0);
 idx.subs = find(ismember(cellstr(cnap.reacID),substrate_rID));
