@@ -62,6 +62,7 @@ options.milp_time_limit = 7200; % 2h
 solve_in_new_process = 0;
 
 options.mcs_search_mode = 1; % find any MCS
+options.milp_solver = 'gurobi';
 maxSolutions = 30;
 maxCost = 25;
 verbose = 1;
@@ -136,7 +137,7 @@ gpr_gs = CNAgetGenericReactionData_as_array(cnap,'geneProductAssociation');
 cnap = block_non_standard_products(cnap);
 cnap.reacMin(ismember(cnap.reacID,{'EX_glc__D_e'})) = -10;
 cnap.reacMin(~cellfun(@isempty,regexp(gpr_gs,'fadE','match'))) = 0; % block reverse beta-oxidation
-[minFlux,maxFlux] = CNAfluxVariability(cnap,[],[],-1,1:cnap.numr,[],[],0);
+[minFlux,maxFlux] = CNAfluxVariability(cnap,[],[],3,1:cnap.numr,[],[],0);
 cnap = CNAdeleteReaction(cnap,find(minFlux==0 & maxFlux==0));
 cnap = CNAdeleteSpecies(cnap,find(~any(cnap.stoichMat,2)),0);
 
@@ -145,6 +146,7 @@ load(which('iJO_core.mat'));
 core_reacs = [core_reacs;{reactions.reac_id}'];
 core_reacs = [core_reacs;{'NADH18pp'; 'SULR'}];
 % conserve also all fad-reactions
+gpr = CNAgetGenericReactionData_as_array(cnap,'geneProductAssociation');
 core_reacs = [core_reacs;cellstr(cnap.reacID(find(~cellfun(@isempty,regexp(gpr,'fad','match'))),:))];
 core_specs = [core_specs;{species.spec_id}'  ];
 % load(which('core.mat'));
@@ -159,11 +161,32 @@ for i = octa_reacs
     if fv(i)>=0.1
         A_ieq = sparse(1,i,-1,1,cnap1.numr);
         b_ieq = -fv(i);
-        [minFlux,maxFlux] = CNAfluxVariability(cnap1,[],[],-1,1:cnap1.numr,A_ieq,b_ieq,0);
-        octa_c_essential = find((minFlux.*maxFlux)>0);
+        [minFlux,maxFlux] = CNAfluxVariability(cnap1,[],[],3,1:cnap1.numr,A_ieq,b_ieq,0);
+        octa_c_essential = find((minFlux.*maxFlux)>=1e-10);
         core_reacs = unique([core_reacs;cellstr(cnap1.reacID(octa_c_essential,:))]);
     end
 end
+% Protect reactions for aerobic growth
+biomass_rID   = regexp(cellstr(cnap1.reacID),'BIOMASS_Ec.*core.*','match');
+biomass_rID   = char([biomass_rID{:}]);
+idx.bm = find(ismember(cellstr(cnap1.reacID),biomass_rID));
+idx.o2 = find(ismember(cellstr(cnap1.reacID),'EX_o2_e'));
+
+cnap1.objFunc(:) = 0;
+cnap1.objFunc(idx.bm) = -1;
+A_ieq = sparse(1,idx.bm,-1,1,cnap1.numr);
+b_ieq = -0.8;
+[minFlux,maxFlux] = CNAfluxVariability(cnap1,[],[],3,1:cnap1.numr,A_ieq,b_ieq,0);
+growth_o2_essential = find((minFlux.*maxFlux)>=1e-10);
+growth_o2_pars = cellstr(cnap1.reacID(abs(CNAoptimizeFlux(cnap1,[],[],3,-1,1,A_ieq,b_ieq))>=1e-10,:));
+core_reacs = unique([core_reacs;cellstr(cnap1.reacID(growth_o2_essential,:));growth_o2_pars]);
+% Protect reactions for anaerobic growth
+A_ieq = sparse([1,2],[idx.bm,idx.o2],-1,2,cnap1.numr);
+b_ieq = [-0.22;0];
+[minFlux,maxFlux] = CNAfluxVariability(cnap1,[],[],3,1:cnap1.numr,A_ieq,b_ieq,0);
+growth_essential = find((minFlux.*maxFlux)>=1e-10);
+growth_pars = cellstr(cnap1.reacID(abs(CNAoptimizeFlux(cnap1,[],[],3,-1,1,A_ieq,b_ieq))>=1e-10,:));
+core_reacs = unique([core_reacs;cellstr(cnap1.reacID(growth_essential,:));growth_pars]);
 
 % Load heterologous pathways if necessary
 for spec = species
@@ -184,32 +207,32 @@ for i = 1:length(ecoliGeneNames)
     cnap.reacNotes = strrep(cnap.reacNotes,ecoliGeneNames(i,1),ecoliGeneNames(i,2));
 end
 
-% copy fatty acid synthesis reactions/genes
-gpr = CNAgetGenericReactionData_as_array(cnap,'geneProductAssociation');
-fabG_reactions = ~cellfun(@isempty,regexp(gpr,'fabG','match'));
-% fabNADH
-cnap.numr = cnap.numr+sum(fabG_reactions);
-cnap.reacMin = [cnap.reacMin; cnap.reacMin(fabG_reactions)];
-cnap.reacMax = [cnap.reacMax; cnap.reacMax(fabG_reactions)];
-cnap.reacID  = char([cellstr(cnap.reacID); cellstr(strcat(cnap.reacID(fabG_reactions,:),'_NADH'))]);
-fabNADH_notes = cnap.reacNotes(fabG_reactions);
-fabNADH_notes = strrep(fabNADH_notes,'fabG','fabNADH');
-cnap.reacNotes = [cnap.reacNotes, fabNADH_notes];
-cnap.objFunc = [cnap.objFunc; cnap.objFunc(fabG_reactions)];
-cnap.reacVariance = [cnap.reacVariance; cnap.reacVariance(fabG_reactions)];
-cnap.reacDefault = [cnap.reacDefault; cnap.reacDefault(fabG_reactions)];
-cnap.reacBoxes = [cnap.reacBoxes; cnap.reacBoxes(fabG_reactions,:)];
-% replace NADPH with NADH in stoichmat
-fabNADH_stoichMat = cnap.stoichMat(:,fabG_reactions);
-idx_nadh_c  = find(strcmp(cellstr(cnap.specID),'nadh_c'));
-idx_nad_c   = find(strcmp(cellstr(cnap.specID),'nad_c'));
-idx_nadph_c = find(strcmp(cellstr(cnap.specID),'nadph_c'));
-idx_nadp_c  = find(strcmp(cellstr(cnap.specID),'nadp_c'));
-fabNADH_stoichMat(idx_nadh_c,:) = fabNADH_stoichMat(idx_nadph_c,:);
-fabNADH_stoichMat(idx_nad_c,:)  = fabNADH_stoichMat(idx_nadp_c,:);
-fabNADH_stoichMat(idx_nadph_c,:) = 0;
-fabNADH_stoichMat(idx_nadp_c,:) = 0;
-cnap.stoichMat = [cnap.stoichMat, fabNADH_stoichMat];
+% % copy fatty acid synthesis reactions/genes
+% gpr = CNAgetGenericReactionData_as_array(cnap,'geneProductAssociation');
+% fabG_reactions = ~cellfun(@isempty,regexp(gpr,'fabG','match'));
+% % fabNADH
+% cnap.numr = cnap.numr+sum(fabG_reactions);
+% cnap.reacMin = [cnap.reacMin; cnap.reacMin(fabG_reactions)];
+% cnap.reacMax = [cnap.reacMax; cnap.reacMax(fabG_reactions)];
+% cnap.reacID  = char([cellstr(cnap.reacID); cellstr(strcat(cnap.reacID(fabG_reactions,:),'_NADH'))]);
+% fabNADH_notes = cnap.reacNotes(fabG_reactions);
+% fabNADH_notes = strrep(fabNADH_notes,'fabG','fabNADH');
+% cnap.reacNotes = [cnap.reacNotes, fabNADH_notes];
+% cnap.objFunc = [cnap.objFunc; cnap.objFunc(fabG_reactions)];
+% cnap.reacVariance = [cnap.reacVariance; cnap.reacVariance(fabG_reactions)];
+% cnap.reacDefault = [cnap.reacDefault; cnap.reacDefault(fabG_reactions)];
+% cnap.reacBoxes = [cnap.reacBoxes; cnap.reacBoxes(fabG_reactions,:)];
+% % replace NADPH with NADH in stoichmat
+% fabNADH_stoichMat = cnap.stoichMat(:,fabG_reactions);
+% idx_nadh_c  = find(strcmp(cellstr(cnap.specID),'nadh_c'));
+% idx_nad_c   = find(strcmp(cellstr(cnap.specID),'nad_c'));
+% idx_nadph_c = find(strcmp(cellstr(cnap.specID),'nadph_c'));
+% idx_nadp_c  = find(strcmp(cellstr(cnap.specID),'nadp_c'));
+% fabNADH_stoichMat(idx_nadh_c,:) = fabNADH_stoichMat(idx_nadph_c,:);
+% fabNADH_stoichMat(idx_nad_c,:)  = fabNADH_stoichMat(idx_nadp_c,:);
+% fabNADH_stoichMat(idx_nadph_c,:) = 0;
+% fabNADH_stoichMat(idx_nadp_c,:) = 0;
+% cnap.stoichMat = [cnap.stoichMat, fabNADH_stoichMat];
 
 % Checking mass and and charge balances after pathway additions
 check_mass_balance(cnap);
@@ -305,14 +328,14 @@ disp('Compute production (yield) thresholds.');
 % 1. compute max growth
 cnap.objFunc(:) = 0;
 cnap.objFunc(idx.bm) = -1;
-fv = CNAoptimizeFlux(cnap,[],[],2,-1);
+fv = CNAoptimizeFlux(cnap,[],[],2,3);
 r_bm_max20 = 0.2*fv(idx.bm);
 % 2. compute max production at 20% growth
 cnap.objFunc(:) = 0;
 cnap.objFunc(ismember(cnap.reacID,{product_rID})) = -1;
 fv_fix = nan(cnap.numr,1);
 fv_fix(ismember(cnap.reacID,{biomass_rID})) = r_bm_max20;
-fv = CNAoptimizeFlux(cnap,fv_fix,[],2,-1);
+fv = CNAoptimizeFlux(cnap,fv_fix,[],2,3);
 r_p_20 = 0.2*fv(ismember(cnap.reacID,{product_rID}));
 % 3. Thresholds for dGCP and SUCP
 Y_PBM = r_p_20/r_bm_max20;
@@ -494,11 +517,11 @@ for i = 1:size(rmcs_tot,2)
     b_ineq = zeros(2*numel(kos),1);
     cnap.objFunc(:) = 0;
     cnap.objFunc(idx.bm) = -1;
-    fv = CNAoptimizeFlux(cnap,[],[],-1,0,0,A_ineq,b_ineq);
+    fv = CNAoptimizeFlux(cnap,[],[],3,0,0,A_ineq,b_ineq);
     max_bm(i) = fv(idx.bm);
     cnap.objFunc(:) = 0;
     cnap.objFunc(idx.prod) = -1;
-    fv = CNAoptimizeFlux(cnap,[],[],-1,0,0,A_ineq,b_ineq);
+    fv = CNAoptimizeFlux(cnap,[],[],3,0,0,A_ineq,b_ineq);
     max_p(i) = fv(idx.prod);
 end
 max_bm = max(max_bm)*1.1;
@@ -555,7 +578,7 @@ function [V,v] = genV(constraints,cnap)
             % fractional constraint ispreprocessed
         if length(numDiv) == 2
             [div, cdiv] = findReacAndCoeff(numDiv(2),reacID);
-            [rMin(div), rMax(div)] = CNAfluxVariability(cnap,[],[],-1,div,[],[],0);
+            [rMin(div), rMax(div)] = CNAfluxVariability(cnap,[],[],3,div,[],[],0);
             % check if all reactions take identical signs (+ or -)
             % this is needed to do the equation rearrangement. If the signs
             % are ambigous, a lot of case differentiations would be needed,
@@ -687,7 +710,7 @@ function [valid_T, valid_D] = verify_mcs(cnap,mcs,T,t,c,D,d)
         cnap_valid_opt = cnap_valid;
         if ~isempty(c)
             cnap_valid.objFunc = c';
-            fv = CNAoptimizeFlux(cnap_valid,[], [], 2, -1);
+            fv = CNAoptimizeFlux(cnap_valid,[], [], 2, 3);
             cnap_valid_opt.reacMin(logical(c)) = fv(logical(c));
             cnap_valid_opt.reacMax(logical(c)) = fv(logical(c));
         end
