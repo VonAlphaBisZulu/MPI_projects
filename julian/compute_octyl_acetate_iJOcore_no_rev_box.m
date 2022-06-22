@@ -63,7 +63,7 @@ solve_in_new_process = 0;
 
 options.mcs_search_mode = 1; % find any MCS
 options.milp_solver = 'gurobi';
-maxSolutions = 30;
+maxSolutions = 7;
 maxCost = 25;
 verbose = 1;
 atpm = 1;
