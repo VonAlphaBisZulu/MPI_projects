@@ -22,46 +22,47 @@
 
 %% User settings
 
-% select one or more coupling type:
-% potential growth-coupling
-% weak growth-coupling
-% directional growth-coupling
-% substrate uptake coupling
+% Select one or more coupling types:
+% - potential growth-coupling
+% - weak growth-coupling
+% - directional growth-coupling
+% - substrate uptake coupling
 coupling = {'potential growth-coupling' 'weak growth-coupling' 'directional growth-coupling' 'substrate uptake coupling'};
 
+% Load pathway and define substrate
 product = 4;
-% product_rID   = 'EX_ibutoh_e';
-[product_rID,species,reactions] = load_pathway(product);
-substrate_rID = 'EX_glc__D_e';
+[product_rID, species, reactions] = load_pathway(product);
+substrate_rID = 'EX_glc__D_e'; % Glycerate as substrate
 
 idx.subsYieldFactor = -6;
 idx.prodYieldFactor = 4;
 num_iter = 1; % select number of times each MCS computation is repeated and 
 options.milp_time_limit = 7200; % time limit for computations: 2h
 
-% choose whether a new instance of MATLAB should be started for each MCS computation.
-% This measure ensures memory cleanup between the MCS runs. (usually not needed with 
-% Windows and not needed with small models)
+% Choose whether a new instance of MATLAB should be started for each MCS 
+% computation. This measure ensures memory cleanup between the MCS runs. 
+% (Usually not needed with Windows and or with small models.)
 solve_in_new_process = 0;
 
+options.milp_solver = 'cplex';
 options.mcs_search_mode = 1; % find any MCS
 options.postproc_verify_mcs = 1;
 maxSolutions = 5;
 maxCost = 25;
 verbose = 1;
 atpm = 1;
-gene_mcs = 1;
+gene_mcs = 0;
 
 %% 0) Starting CNA and Parallel pool (for faster FVA), defining computation settings
 if ~exist('cnan','var')
     startcna(1)
 end
 
-addpath(fullfile(fileparts(mfilename('fullpath')),['..' filesep 'models']));
-addpath(fullfile(fileparts(mfilename('fullpath')),['..' filesep 'results']));
-addpath(fullfile(fileparts(mfilename('fullpath')),['..' filesep 'functions']));
+%addpath(fullfile(fileparts(mfilename('fullpath')),['..' filesep 'models']));
+%addpath(fullfile(fileparts(mfilename('fullpath')),['..' filesep 'results']));
+%addpath(fullfile(fileparts(mfilename('fullpath')),['..' filesep 'functions']));
 projectpath = fullfile(fileparts(mfilename('fullpath')),[filesep '..' filesep]);
-outfile = [fileparts(mfilename('fullpath')) filesep '..' filesep 'results' filesep product_rID];
+outfile = [fileparts(mfilename('fullpath')) filesep '..' filesep 'results_fadE' filesep product_rID];
 
 if ~isempty(getenv('SLURM_JOB_ID')) && isempty(gcp('nocreate')) && ~solve_in_new_process
     % start parpool and locate preferences-directory to tmp path
@@ -102,64 +103,42 @@ end
 
 %% 1) Model setup
 % load model from file
-load([projectpath 'models' filesep 'iML1515.mat']);
-load([projectpath 'models' filesep 'iML1515geneNames.mat']);
-load([projectpath 'models' filesep 'iML_core.mat']); 
-cnap = CNAcobra2cna(iML1515,0);
-% load([projectpath 'models' filesep 'iJO1366.mat']);
-% load([projectpath 'models' filesep 'iJO1366geneNames.mat']);
-% load([projectpath 'models' filesep 'iJO_core.mat']); % Reduce model to core network
-% cnap = CNAcobra2cna(iJO1366,0);
+load('/scratch/MATLAB/StrainBooster/johanna/models/ECC2_extended.mat')
+cnap = CNAcobra2cna(ECC2,0);
 
 % Load MaxCat-Knockouts
-load([projectpath 'models' filesep 'maxCatKOs.mat']);
+load('/scratch/MATLAB/StrainBooster/johanna/models/MaxCatKRECC2extFermentationProd14032022.mat')
 
-biomass_rID   = regexp(cellstr(cnap.reacID),'BIOMASS_Ec.*core.*','match');
-biomass_rID   = char([biomass_rID{:}]);
+biomass_rID = 'BIOMASS_Ec_iJO1366_core_53p95M';
+idx.subs = find(ismember(cellstr(cnap.reacID),substrate_rID)); % Get index of substrate uptake reaction
+idx.bm = find(ismember(cellstr(cnap.reacID),biomass_rID)); % Get index of biomass reaction
+
 % eliminate reactions with blocked flux
 cnap = block_non_standard_products(cnap);
+% Allow substrate update (opening carbon source)
 cnap.reacMin(ismember(cnap.reacID,{substrate_rID})) = -10;
-% replace gene numbers with names
-for i = 1:length(ecoliGeneNames)
-    cnap.reacNotes = strrep(cnap.reacNotes,ecoliGeneNames(i,1),ecoliGeneNames(i,2));
-end
-gpr_gs = CNAgetGenericReactionData_as_array(cnap,'geneProductAssociation');
-cnap.reacMin(~cellfun(@isempty,regexp(gpr_gs,'fadE','match'))) = 0;
-cnap.reacMax(ismember(cnap.reacID,{'POR5'})) = 0;
-cnap.reacMin(ismember(cnap.reacID,{'POR5'})) = 0;
-
-% A_ieq = sparse(1,idx.bm,-1,1,cnap.numr);
-% b_ieq = -0.01;
-% [minFlux,maxFlux] = CNAfluxVariability(cnap,[],[],-1,1:cnap.numr,A_ieq,b_ieq,0);
-core_reacs = [core_reacs;{'NADH18pp'}]; % also conserve NADH18pp
-core_reacs = [core_reacs; cellstr(cnap.reacID(~cellfun(@isempty,regexp(gpr_gs,'fab','match')),:))]; % keep fatty acid synthesis
-% load(which('iML_core.mat')); % iML1515core
-cnap = CNAdeleteReaction(cnap,find(~ismember(cellstr(cnap.reacID),core_reacs)));
-cnap = CNAdeleteSpecies(cnap,find(~any(cnap.stoichMat,2)),0);
-idx.subs = find(ismember(cellstr(cnap.reacID),substrate_rID));
-idx.bm = find(ismember(cellstr(cnap.reacID),biomass_rID));
 
 % replace gene numbers with names
-for i = 1:length(ecoliGeneNames)
-    cnap.reacNotes = strrep(cnap.reacNotes,ecoliGeneNames(i,1),ecoliGeneNames(i,2));
+if gene_mcs % Not necessary for Reaction MCS (because it does not list genes)
+    for i = 1:length(ECC2extendedgeneNames)
+    cnap.reacNotes = strrep(cnap.reacNotes,ECC2extendedgeneNames(i,1),ECC2extendedgeneNames(i,2));
+    end
 end
+
+% Additional MaxCat KOs (not knockable)
+%gpr_gs = CNAgetGenericReactionData_as_array(cnap,'geneProductAssociation');
+%cnap.reacMin(~cellfun(@isempty,regexp(gpr_gs,'fadE','match'))) = 0; % Beta oxidation irreversible
+%cnap.reacMax(~cellfun(@isempty,regexp(gpr_gs,'fadE','match'))) = 0;
+
+A_ieq = sparse(1,idx.bm,-1,1,cnap.numr);
+b_ieq = -0.01;
+[minFlux,maxFlux] = CNAfluxVariability(cnap,[],[],-1,1:cnap.numr,A_ieq,b_ieq,0);
 
 % Optionally no minimum ATP Maintenance
 if ~atpm
 	cnap.reacMin(~cellfun(@isempty,(regexp(cellstr(cnap.reacID),'ATPM')))) = 0;
-    cnap.reacMax(~cellfun(@isempty,(regexp(cellstr(cnap.reacID),'EX_glc__D_e')))) = -10;
+    cnap.reacMax(~cellfun(@isempty,(regexp(cellstr(cnap.reacID),'EX_mal__D_e')))) = -10;
 end
-
-% Draft isobutanol pathway (now done at the beginning of the script)
-% species(1)   = struct('spec_id','2mppal_c','spec_name','2-Methylpropanal','fbc_chemicalFormula','C4H8O','fbc_charge',0);
-% species(2)   = struct('spec_id','ibutoh_c','spec_name','Isobutyl alcohol','fbc_chemicalFormula','C4H10O','fbc_charge',0);
-% species(3)   = struct('spec_id','ibutoh_p','spec_name','Isobutyl alcohol','fbc_chemicalFormula','C4H10O','fbc_charge',0);
-% species(4)   = struct('spec_id','ibutoh_e','spec_name','Isobutyl alcohol','fbc_chemicalFormula','C4H10O','fbc_charge',0);
-% reactions(1) = struct('reac_id','3MOBDC','equation','1 3mob_c + 1 h_c = 1 co2_c + 1 2mppal_c','lb',0,'ub',1000,'fbc_geneProductAssociation','kivD');
-% reactions(2) = struct('reac_id','ALCD23xi','equation','1 h_c + 1 nadh_c + 1 2mppal_c = 1 nad_c + 1 ibutoh_c','lb',0,'ub',1000,'fbc_geneProductAssociation','adh2');
-% reactions(3) = struct('reac_id','IBUTOHtpp','equation','1 ibutoh_c = 1 ibutoh_p','lb',-1000,'ub',1000,'fbc_geneProductAssociation','');
-% reactions(4) = struct('reac_id','IBUTOHtex','equation','1 ibutoh_p = 1 ibutoh_e','lb',-1000,'ub',1000,'fbc_geneProductAssociation','');
-% reactions(5) = struct('reac_id','EX_ibutoh_e','equation','1 ibutoh_e =','lb',0,'ub',1000,'fbc_geneProductAssociation','');
 
 % Add heterologous pathway to model
 for spec = species
@@ -173,53 +152,61 @@ end
 idx.prod = find(ismember(cellstr(cnap.reacID),product_rID));
 
 % Checking mass and and charge balances after pathway additions
-check_mass_balance(cnap);
+%check_mass_balance(cnap); %% TODO fix error
 
 % replace bounds with inf
 cnap.reacMin(cnap.reacMin==-1000) = -inf;
 cnap.reacMax(cnap.reacMax== 1000) =  inf;
 
+%%
+
 if gene_mcs
-    % For gene MCS
-    % lump several gene subunits that only occur together
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'ATPS4rpp')),'geneProductAssociation','atpS*');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'NADH16pp')),'geneProductAssociation','nuo*');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'NADH17pp')),'geneProductAssociation','nuo*');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'NADH18pp')),'geneProductAssociation','nuo*');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'FRD2')),'geneProductAssociation','frd*');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'FRD3')),'geneProductAssociation','frd*');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'CYTBO3_4pp')),'geneProductAssociation','cyo*');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'THD2pp')),'geneProductAssociation','pnt*');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'PDH')),'geneProductAssociation','ace* and lpd');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'AKGDH')),'geneProductAssociation','sucAB and lpd');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'SUCOAS')),'geneProductAssociation','sucCD');
-    cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'SUCDi')),'geneProductAssociation','sdh*'); % sdhA,B,C,D
-    maxCatKOs = regexprep(maxCatKOs,'nuo.','nuo*');
-    maxCatKOs = regexprep(maxCatKOs,'sdh.','sdh*');
-    [~,~,genes,gpr_rules] = CNAgenerateGPRrules(cnap);
-    % All genes are knockable apart from pseudo-gene that marks spontanous reactions
-    gkoCost = ones(length(genes),1);
-    gkoCost(ismember(genes,'spontanous')) = nan;
-    gkiCost = nan(length(genes),1);
-    gkiCost(ismember(genes,maxCatKOs)) = 1; % mark MaxCat-Knockouts as possible knockins
-    rkiCost = nan(cnap.numr,1);
-    % Reactions are not knockable % apart from O2 supply
-    rkoCost = nan(cnap.numr,1);
-    rkoCost(strcmp(cellstr(cnap.reacID),'EX_o2_e')) = 1;
-    [full_cnap, rmap] = CNAintegrateGPRrules(cnap);
+%     % For gene MCS
+%     % lump several gene subunits that only occur together
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'ATPS4rpp')),'geneProductAssociation','atp*'); % atp instead of atpS in ECC2 (all genes associated to ATP Synthase)
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'NADH16pp')),'geneProductAssociation','nuo*');
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'NADH17pp')),'geneProductAssociation','nuo*');
+%     %cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'NADH18pp')),'geneProductAssociation','nuo*');
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'FRD2')),'geneProductAssociation','frd*');
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'FRD3')),'geneProductAssociation','frd*');
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'CYTBO3_4pp')),'geneProductAssociation','cyo*');
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'THD2pp')),'geneProductAssociation','pnt*');
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'PDH')),'geneProductAssociation','ace* and lpd');
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'AKGDH')),'geneProductAssociation','sucAB and lpd');
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'SUCOAS')),'geneProductAssociation','sucCD');
+%     cnap = CNAsetGenericReactionData(cnap,find(strcmp(cellstr(cnap.reacID),'SUCDi')),'geneProductAssociation','sdh*'); % sdhA,B,C,D
+%     MaxCatknockablegenesECC2extended28022022 = regexprep(MaxCatknockablegenesECC2extended28022022,'nuo.','nuo*');
+%     MaxCatknockablegenesECC2extended28022022 = regexprep(MaxCatknockablegenesECC2extended28022022,'sdh.','sdh*');
+%     [~,~,genes,gpr_rules] = CNAgenerateGPRrules(cnap);
+% 
+%     % All genes are knockable apart from pseudo-gene that marks spontanous reactions
+%     gkoCost = ones(length(genes),1);
+%     gkoCost(ismember(genes,'spontaneous')) = nan; % Fixed typo for spontaneous
+%     gkiCost = nan(length(genes),1);
+%     gkiCost(ismember(genes,MaxCatknockablegenesECC2extended28022022)) = 1; % mark MaxCat-Knockouts as possible knockins
+%     rkiCost = nan(cnap.numr,1);
+%     % Reactions are not knockable % apart from O2 supply
+%     rkoCost = nan(cnap.numr,1);
+%     rkoCost(strcmp(cellstr(cnap.reacID),'EX_o2_e')) = 1;
+%     [full_cnap, rmap] = CNAintegrateGPRrules(cnap);
 else
     % For reaction MCS
     % knockables: All reactions with gene rules + O2 exchange as a potential knockout
-    gpr = CNAgetGenericReactionData_as_array(cnap,'geneProductAssociation');
+    gpr = CNAgetGenericReactionData_as_array(cnap,'geneProductAssociation'); % Retrieve GPR rules
     koCost = double(cellfun(@(x) ~isempty(x),gpr));
-    notknock_gene = ~cellfun(@isempty,regexp(gpr,'(spontanous|phoE|ompF|ompN|ompC)','match'));
-%     notknock_gene = ~cellfun(@isempty,regexp(gpr,'(spontanous|phoE|ompF|ompN|ompC|sufA|sufB|sufC|sufD|sufE|sufS)','match')); % maybe also iscA|iscS|iscU
+    notknock_gene = ~cellfun(@isempty,regexp(gpr,'(spontaneous|phoE|ompF|ompN|ompC)','match'));
+%     notknock_gene = ~cellfun(@isempty,regexp(gpr,'(spontaneous|phoE|ompF|ompN|ompC|sufA|sufB|sufC|sufD|sufE|sufS)','match')); % maybe also iscA|iscS|iscU
     koCost(koCost==0 | notknock_gene) = nan;
+    koCost(strcmp(cellstr(cnap.reacID),'EX_o2_e')) = nan; % Mark O2 as not knockable
+    
     kiCost = nan(cnap.numr,1);
-    koCost(strcmp(cellstr(cnap.reacID),'EX_o2_e')) = 1;
+    kiCost(ismember(ECC2.rxns,MaxCatKRECC2extFermentationProd14032022)) = 1; % mark MaxCat-Knockouts as possible knockins
+
     full_cnap = cnap;
     rmap = eye(cnap.numr);
 end
+
+%%
 
 % save intervention costs for later
 if isfield(full_cnap,'rType')
@@ -233,6 +220,8 @@ else
     intvCost = kiCost;
     intvCost(isnan(kiCost)) = koCost(isnan(kiCost));
 end
+
+
 
 %% 2) Define MCS setup
 modules{1}.sense = 'desired';
@@ -272,8 +261,10 @@ Y_PBM = r_p_20/r_bm_max20;
 Y_PS  = r_p_20/-fv(ismember(cnap.reacID,{substrate_rID}));
 
 comptime = nan(4*num_iter,1);
-gmcs_tot = nan(full_cnap.numr,0);
+gmcs_tot = nan(full_cnap.numr,0); % Allocate memory for gmcs
 rmcs_tot = nan(cnap.numr,0);
+
+%% Define modules for couplings
 for coupl = coupling
     clear('modules');
     % Desired fluxes for all coupling cases: growth >= 0.05/h
@@ -321,7 +312,7 @@ for coupl = coupling
                                                 gkoCost, gkiCost,...
                                                 options,verbose);
             else
-                [rmcs, ~, comptime(i)] = MCS_enum_thread(gene_mcs,cnap,  modules,...
+                [rmcs, ~, comptime(i)] = MCS_enum_thread(gene_mcs,cnap,modules,...
                                                 koCost,kiCost,...
                                                 maxSolutions,maxCost,...
                                                 [],[],...
@@ -338,17 +329,22 @@ for coupl = coupling
                         gkoCost,gkiCost,[],...
                         options,verbose);
             else
-                 [gmcs, status] = CNAMCSEnumerator3(cnap,modules,...
+                 [rmcs, status] = CNAMCSEnumerator3(cnap,modules,... % Changed gmcs to rmcs here
                         koCost,kiCost,...
                         maxSolutions,maxCost,...
                         options,verbose);
             end
             comptime(i) = toc;
         end
-        if ~isempty(gmcs)
-            rmcs_tot  = [rmcs_tot,rmcs];
-            gmcs_tot  = [gmcs_tot,gmcs];
-        end
+        %if ~isempty(gmcs) % Hot fix (gmcs not assigned for Reaction based
+        %MCS)
+        disp('DEBUGGING RCMS: Display size:, line 341 (MaxCat_MCS)');
+        disp(size(rmcs));
+        disp('DEBUGGING RMCS: Display matrix: line 343 (MaxCat_MCS)');
+        disp(rmcs);
+        rmcs_tot  = [rmcs_tot,rmcs];
+            %gmcs_tot  = [gmcs_tot,gmcs];
+        %end
     end
 end
 
@@ -365,78 +361,84 @@ end
 % faster than in the GPR-extended model. Furthermore different gene-MCS can lead to 
 % identical 'phenotypes' when translated to the reaction-model and by analyzing rMCS
 % only a reduced, non-redundant set of reaction-MCS needs therefore to be considered.
-if full(~all(all(isnan(gmcs_tot)))) % if mcs have been found
-    disp('Characterizing mcs');
-  % 5.1) Lump redundant MCS and create flux bounds for each mutant model
-    rmcs_tot(isnan(rmcs_tot)) = -inf; % this step allows to apply 'unique' to remove duplicates
-    [rmcs_tot,~,gmcs_rmcs_map] = unique(rmcs_tot','rows');
-    rmcs_tot = rmcs_tot';
-    rmcs_tot(rmcs_tot == -inf) = nan;
-    MCS_mut_lb = repmat({cnap.reacMin},1,size(rmcs_tot,2));
-    MCS_mut_ub = repmat({cnap.reacMax},1,size(rmcs_tot,2));
-    for i = 1:size(rmcs_tot,2)
-        MCS_mut_lb{i} = MCS_mut_lb{i}.*(rmcs_tot(:,i)==1 | rmcs_tot(:,i)==0);
-        MCS_mut_lb{i}(isnan(MCS_mut_lb{i})) = 0;
-        MCS_mut_ub{i} = MCS_mut_ub{i}.*(rmcs_tot(:,i)==1 | rmcs_tot(:,i)==0);
-        MCS_mut_ub{i}(isnan(MCS_mut_ub{i})) = 0;
-    end
-  % 5.2) Set relevant indices [criterion 2-7] and prepare thermodynamic (MDF) parameters [criterion 9]
-    % reaction indices
-    T = readcell([projectpath 'models' filesep 'thermo_iML1515_ph7.50.csv']);
-    for i = 1:numel(T)
-        if ismissing(T{i})
-            T{i} = nan;
-        end
-    end
-    pos = findStrPos(cnap.reacID,T(2:end,2));
-    deltaGR_0_raw = cell2mat(T(2:end,3));
-    deltaGR_0 = nan(cnap.numr,1);
-    deltaGR_0(pos(~~pos)) = deltaGR_0_raw(~~pos);
-    
-    uncertGR_0_raw = cell2mat(T(2:end,4));
-    uncertGR_0 = nan(cnap.numr,1);
-    uncertGR_0(pos(~~pos)) = deltaGR_0_raw(~~pos);
-    
-    cnap = CNAsetGenericReactionData_with_array(cnap,'deltaGR_0',num2cell(deltaGR_0));
-    cnap = CNAsetGenericReactionData_with_array(cnap,'uncertGR_0',num2cell(uncertGR_0));
-    
-    [idx,mdfParam] = relev_indc_and_mdf_Param(cnap,idx);
 
-  % 5.3) Define core metabolism [criterion 8]
-    % Add the new reactions also to the list of reactions that will be
-    % considered "core" reactions in the final MCS characterization and ranking
-    new_reacs = ismember(cellstr(cnap.reacID),{reactions.reac_id});
-    reac_in_core_metabolism = ismember(cellstr(cnap.reacID),core_reacs);
-    reac_in_core_metabolism(new_reacs) = 1;
-    lbCore = cnap.reacMin;
-    ubCore = cnap.reacMax;
-    lbCore(~reac_in_core_metabolism) = 0;
-    ubCore(~reac_in_core_metabolism) = 0;
-  % 5.4) Costs for genetic interventions  [criterion 10]
-    gene_and_reac_names = cellstr(full_cnap.reacID);
-    gene_and_reac_names(full_cnap.rType == 'g') = cellstr(full_cnap.reacID((full_cnap.rType == 'g'),4:end)); % to avoid the 'GR-' prefix
-    gene_and_reac_names(full_cnap.rType == 'g') = strrep(strrep(gene_and_reac_names(full_cnap.rType == 'g'),'(',''),')',''); % remove brackets
-  % 5.5) Start characterization and ranking
-    [MCS_rankingStruct, MCS_rankingTable]...
-        = CNAcharacterizeGeneMCS( cnap , MCS_mut_lb, MCS_mut_ub, 1:size(MCS_mut_lb,2),... model, mutants LB,UB, incices ranked mcs
-        idx, idx.cytMet, modules, mdfParam, ... relevant indices, Desired and Target regions
-        lbCore, ubCore, gmcs_tot, intvCost, gene_and_reac_names, gmcs_rmcs_map, ...
-        [0:11], ones(1,11),2); % assessed criteria and weighting factors
-    % save ranking and textual gmcs as tab-separated-values
-    cell2csv([outfile '.tsv'],MCS_rankingTable,char(9));
-    text_gmcs = cell(size(gmcs_tot,2),1);
-    for i = 1:size(gmcs_tot,2)
-        mcs_tx = strtrim(strsplit(mcs2text(reac_names,gmcs_tot(:,i)),','));
-        text_gmcs(i,1:numel(mcs_tx)) = mcs_tx;
-    end
-    cell2csv([outfile '-gmcs.tsv'],text_gmcs,char(9));
-    save([outfile '.mat'],'MCS_rankingStruct','MCS_rankingTable','cnap','full_cnap','gmcs_tot','rmcs_tot','gmcs_rmcs_map');
-    if ~isempty(getenv('SLURM_JOB_ID'))
-        system(['~/bin/sshpass -f ~/.kdas scp ' [outfile '-gmcs.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
-        system(['~/bin/sshpass -f ~/.kdas scp ' [outfile '.mat'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
-        system(['~/bin/sshpass -f ~/.kdas scp ' [outfile '.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
-    end
-end
+% if full(~all(all(isnan(rmcs_tot)))) % if mcs have been found HOTFIX: changed to RMCS here (08/03/2022)
+%     disp('Characterizing mcs');
+%     % 5.1) Lump redundant MCS and create flux bounds for each mutant model
+%     rmcs_tot(isnan(rmcs_tot)) = -inf; % this step allows to apply 'unique' to remove duplicates
+%     [rmcs_tot,~,gmcs_rmcs_map] = unique(rmcs_tot','rows');
+%     rmcs_tot = rmcs_tot';
+%     rmcs_tot(rmcs_tot == -inf) = nan;
+%     MCS_mut_lb = repmat({cnap.reacMin},1,size(rmcs_tot,2));
+%     MCS_mut_ub = repmat({cnap.reacMax},1,size(rmcs_tot,2));
+%     for i = 1:size(rmcs_tot,2)
+%         MCS_mut_lb{i} = MCS_mut_lb{i}.*(rmcs_tot(:,i)==1 | rmcs_tot(:,i)==0);
+%         MCS_mut_lb{i}(isnan(MCS_mut_lb{i})) = 0;
+%         MCS_mut_ub{i} = MCS_mut_ub{i}.*(rmcs_tot(:,i)==1 | rmcs_tot(:,i)==0);
+%         MCS_mut_ub{i}(isnan(MCS_mut_ub{i})) = 0;
+%     end
+%   % 5.2) Set relevant indices [criterion 2-7] and prepare thermodynamic (MDF) parameters [criterion 9]
+%     % reaction indices
+%     T = readcell([projectpath 'models' filesep 'thermo_iML1515_ph7.50.csv']);
+%     for i = 1:numel(T)
+%         if ismissing(T{i})
+%             T{i} = nan;
+%         end
+%     end
+%     pos = findStrPos(cnap.reacID,T(2:end,2));
+%     deltaGR_0_raw = cell2mat(T(2:end,3));
+%     deltaGR_0 = nan(cnap.numr,1);
+%     deltaGR_0(pos(~~pos)) = deltaGR_0_raw(~~pos);
+%     
+%     uncertGR_0_raw = cell2mat(T(2:end,4));
+%     uncertGR_0 = nan(cnap.numr,1);
+%     uncertGR_0(pos(~~pos)) = deltaGR_0_raw(~~pos);
+%     
+%     cnap = CNAsetGenericReactionData_with_array(cnap,'deltaGR_0',num2cell(deltaGR_0));
+%     cnap = CNAsetGenericReactionData_with_array(cnap,'uncertGR_0',num2cell(uncertGR_0));
+%     
+%     [idx,mdfParam] = relev_indc_and_mdf_Param(cnap,idx);
+% 
+%   % 5.3) Define core metabolism [criterion 8]
+%     % Add the new reactions also to the list of reactions that will be
+%     % considered "core" reactions in the final MCS characterization and ranking
+%     %core_reacs = 
+%     reac_in_core_metabolism = ismember(cellstr(cnap.reacID),{reactions.reac_id}); % CHANGE HERE: Everything is core, because ECC2 is
+%     
+%     %new_reacs = ismember(cellstr(cnap.reacID),{reactions.reac_id});
+%     %reac_in_core_metabolism = ismember(cellstr(cnap.reacID),core_reacs);
+%     %reac_in_core_metabolism(new_reacs) = 1;
+%     %lbCore = cnap.reacMin;
+%     %ubCore = cnap.reacMax;
+%     lbCore(~reac_in_core_metabolism) = 0;
+%     ubCore(~reac_in_core_metabolism) = 0;
+%   % 5.4) Costs for genetic interventions  [criterion 10]
+%     gene_and_reac_names = cellstr(full_cnap.reacID);
+%     gene_and_reac_names(full_cnap.rType == 'g') = cellstr(full_cnap.reacID((full_cnap.rType == 'g'),4:end)); % to avoid the 'GR-' prefix
+%     gene_and_reac_names(full_cnap.rType == 'g') = strrep(strrep(gene_and_reac_names(full_cnap.rType == 'g'),'(',''),')',''); % remove brackets
+%   % 5.5) Start characterization and ranking
+%     [MCS_rankingStruct, MCS_rankingTable]...
+%         = CNAcharacterizeGeneMCS( cnap , MCS_mut_lb, MCS_mut_ub, 1:size(MCS_mut_lb,2),... model, mutants LB,UB, incices ranked mcs
+%         idx, idx.cytMet, modules, mdfParam, ... relevant indices, Desired and Target regions
+%         lbCore, ubCore, gmcs_tot, intvCost, gene_and_reac_names, gmcs_rmcs_map, ...
+%         [0:11], ones(1,11),2); % assessed criteria and weighting factors
+%     % save ranking and textual gmcs as tab-separated-values
+%     cell2csv([outfile '.tsv'],MCS_rankingTable,char(9));
+%     text_gmcs = cell(size(gmcs_tot,2),1);
+%     for i = 1:size(gmcs_tot,2)
+%         mcs_tx = strtrim(strsplit(mcs2text(reac_names,gmcs_tot(:,i)),','));
+%         text_gmcs(i,1:numel(mcs_tx)) = mcs_tx;
+%     end
+% 
+%     %cell2csv([outfile '-gmcs.tsv'],text_gmcs,char(9));
+%     save([outfile '.mat'],'MCS_rankingStruct','MCS_rankingTable','cnap','full_cnap','gmcs_tot','rmcs_tot','gmcs_rmcs_map');
+%     if ~isempty(getenv('SLURM_JOB_ID'))
+%         system(['~/bin/sshpass -f ~/.kdas scp ' [outfile '-gmcs.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
+%         system(['~/bin/sshpass -f ~/.kdas scp ' [outfile '.mat'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
+%         system(['~/bin/sshpass -f ~/.kdas scp ' [outfile '.tsv'] ' schneiderp@linssh.mpi-magdeburg.mpg.de:/data/bio/teams/modeling/SchneiderP/Results/2020_mechthild']);
+%     end
+% end
+disp(size(rmcs_tot,2));
 % Determine limits for Phase plane
 for i = 1:size(rmcs_tot,2)
     kos = find(rmcs_tot(:,i)==-1 | isnan(rmcs_tot(:,i)));
@@ -462,9 +464,20 @@ for i = 1:size(rmcs_tot,2)
     xlim([0 max_bm]);
     ylim([0 max_p]);
     title(['MCS ' num2str(i,'%03d')]);
-    saveas(f,[outfile '_MCS_' num2str(i,'%03d')],'emf')
+    saveas(f,[outfile '_MCS_' num2str(i,'%03d')],'png')
     delete(f);
 end
+
+% HOTFIX: only print MCS (without characterisation)
+disp(rmcs_tot);
+%disp(rmcs);
+% text_rmcs = cell(size(rmcs_tot,2),1);
+% for i = 1:size(rmcs_tot, 2)
+%     mcs_txt = strtrim(strsplit(mcs2text(reac_names, rmcs_tot(:,1)),','));
+%     text_rmcs(i,1:numel(mcs_txt)) = mcs_txt;
+% end
+% cell2csv([outfile '-rcms.csv'], text_rmcs, char(9));
+
 disp('Finished.');
 
 
@@ -482,7 +495,7 @@ function [V,v] = genV(constraints,cnap)
 
     for j = 1:size(constraints,1)
         % get right hand side
-        a = constraints{j,3};
+        a = constraints{j,3}; 
         if ischar(a)
             a = str2double(a);
             if isnan(a)
