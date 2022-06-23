@@ -430,7 +430,7 @@ else
     reac_names = cnap.reacID;
 end
 
-filename = [fileparts(which('compute_octyl_acetate_iJOcore.m')) filesep 'results' filesep product_rID];
+filename = [fileparts(which('compute_octyl_acetate_iJOcore.m')) filesep product_rID];
     
 %% Characterization and ranking of MCS
 % Instead of the gene-MCS, their corresponding reaction-representations are analyzed.
